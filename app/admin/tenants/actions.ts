@@ -327,7 +327,105 @@ const InviteAdminSchema = z.object({
 export type InviteAdminState = {
   error: string | null;
   success: boolean;
+  // For password-set mode, the action echoes back the credentials so the UI
+  // can render them for the super admin to copy and share out-of-band.
+  createdCredentials?: { email: string; password: string } | null;
 };
+
+const CreateAdminWithPasswordSchema = z.object({
+  tenant_id: z.string().uuid("Invalid tenant id."),
+  email: z.string().trim().email("Enter a valid email."),
+  full_name: z
+    .string()
+    .trim()
+    .max(120)
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters.")
+    .max(72, "Password must be 72 characters or fewer."),
+});
+
+export async function createAdminWithPasswordAction(
+  _prev: InviteAdminState,
+  formData: FormData
+): Promise<InviteAdminState> {
+  const supabase = createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in.", success: false };
+
+  const parsed = CreateAdminWithPasswordSchema.safeParse({
+    tenant_id: formData.get("tenant_id"),
+    email: formData.get("email"),
+    full_name: formData.get("full_name"),
+    password: formData.get("password"),
+  });
+  if (!parsed.success) {
+    return {
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+      success: false,
+    };
+  }
+
+  const { tenant_id, email, full_name, password } = parsed.data;
+
+  const service = createSupabaseServiceClient();
+
+  // Confirm the tenant exists (also gives us a nice 404-ish error if not).
+  const { data: tenant } = await service
+    .from("tenants")
+    .select("id")
+    .eq("id", tenant_id)
+    .maybeSingle();
+  if (!tenant) return { error: "Tenant not found.", success: false };
+
+  // email_confirm: true marks the email as already verified so the new user
+  // can sign in immediately without clicking a confirmation link.
+  const { data, error } = await service.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: full_name ?? "" },
+  });
+
+  if (error) {
+    return {
+      error: friendlyInviteError(error),
+      success: false,
+    };
+  }
+
+  const newUserId = data.user?.id;
+  if (!newUserId) {
+    return { error: "Account creation returned no user id.", success: false };
+  }
+
+  // Promote the freshly-created profile into tenant_admin for this tenant.
+  const { error: profileError } = await service
+    .from("user_profiles")
+    .update({
+      role: "tenant_admin",
+      tenant_id,
+      full_name: full_name ?? null,
+    })
+    .eq("id", newUserId);
+  if (profileError) {
+    return {
+      error: `Account created but profile update failed: ${profileError.message}`,
+      success: false,
+    };
+  }
+
+  revalidatePath(`/admin/tenants/${tenant_id}/edit`);
+  return {
+    error: null,
+    success: true,
+    createdCredentials: { email, password },
+  };
+}
 
 export async function inviteAdminAction(
   _prev: InviteAdminState,
