@@ -12,36 +12,120 @@ function ensureAdmin(role: string | null | undefined) {
   }
 }
 
-const SAMPLE_HOUSEHOLDS = [
+type SeedStudent = {
+  first_name: string;
+  last_name: string;
+  grade_level: string;
+  lifecycle_status: "lead" | "trial" | "active" | "waitlist" | "inactive";
+};
+
+type SeedHousehold = {
+  primary_parent_name: string;
+  primary_email: string;
+  primary_phone: string;
+  secondary_parent_name?: string;
+  secondary_email?: string;
+  secondary_phone?: string;
+  mailing_address?: string;
+  students: SeedStudent[];
+};
+
+const SAMPLE_HOUSEHOLDS: SeedHousehold[] = [
   {
     primary_parent_name: "Maya Patel",
     primary_email: "maya.patel.demo@example.com",
     primary_phone: "+15555550101",
+    secondary_parent_name: "Rohit Patel",
+    secondary_email: "rohit.patel.demo@example.com",
+    secondary_phone: "+15555550111",
+    mailing_address: "12 Maple Ave, Springfield, IL",
     students: [
-      { first_name: "Arya", last_name: "Patel", grade_level: "4th" },
-      { first_name: "Veer", last_name: "Patel", grade_level: "2nd" },
+      { first_name: "Arya", last_name: "Patel", grade_level: "4th", lifecycle_status: "active" },
+      { first_name: "Veer", last_name: "Patel", grade_level: "2nd", lifecycle_status: "active" },
     ],
   },
   {
     primary_parent_name: "James Garcia",
     primary_email: "j.garcia.demo@example.com",
     primary_phone: "+15555550102",
-    students: [{ first_name: "Sofia", last_name: "Garcia", grade_level: "6th" }],
+    mailing_address: "445 Oak St, Springfield, IL",
+    students: [
+      { first_name: "Sofia", last_name: "Garcia", grade_level: "6th", lifecycle_status: "active" },
+    ],
   },
   {
     primary_parent_name: "Wei Chen",
     primary_email: "wei.chen.demo@example.com",
     primary_phone: "+15555550103",
+    secondary_parent_name: "Hua Chen",
+    secondary_phone: "+15555550113",
     students: [
-      { first_name: "Lin", last_name: "Chen", grade_level: "5th" },
-      { first_name: "Hao", last_name: "Chen", grade_level: "3rd" },
+      { first_name: "Lin", last_name: "Chen", grade_level: "5th", lifecycle_status: "active" },
+      { first_name: "Hao", last_name: "Chen", grade_level: "3rd", lifecycle_status: "active" },
     ],
   },
   {
     primary_parent_name: "Aisha Khan",
     primary_email: "aisha.khan.demo@example.com",
     primary_phone: "+15555550104",
-    students: [{ first_name: "Zara", last_name: "Khan", grade_level: "7th" }],
+    students: [
+      { first_name: "Zara", last_name: "Khan", grade_level: "7th", lifecycle_status: "active" },
+    ],
+  },
+  {
+    primary_parent_name: "Diego Ramirez",
+    primary_email: "diego.ramirez.demo@example.com",
+    primary_phone: "+15555550105",
+    students: [
+      { first_name: "Mateo", last_name: "Ramirez", grade_level: "5th", lifecycle_status: "trial" },
+      { first_name: "Luna", last_name: "Ramirez", grade_level: "1st", lifecycle_status: "trial" },
+    ],
+  },
+  {
+    primary_parent_name: "Priya Sharma",
+    primary_email: "priya.sharma.demo@example.com",
+    primary_phone: "+15555550106",
+    students: [
+      { first_name: "Aanya", last_name: "Sharma", grade_level: "8th", lifecycle_status: "active" },
+    ],
+  },
+  {
+    primary_parent_name: "Olivia Johnson",
+    primary_email: "o.johnson.demo@example.com",
+    primary_phone: "+15555550107",
+    secondary_parent_name: "Marcus Johnson",
+    secondary_phone: "+15555550117",
+    students: [
+      { first_name: "Ethan", last_name: "Johnson", grade_level: "4th", lifecycle_status: "active" },
+      { first_name: "Ella", last_name: "Johnson", grade_level: "6th", lifecycle_status: "active" },
+      { first_name: "Owen", last_name: "Johnson", grade_level: "2nd", lifecycle_status: "trial" },
+    ],
+  },
+  {
+    primary_parent_name: "Nadia Al-Sayed",
+    primary_email: "nadia.alsayed.demo@example.com",
+    primary_phone: "+15555550108",
+    students: [
+      { first_name: "Yusuf", last_name: "Al-Sayed", grade_level: "K", lifecycle_status: "lead" },
+    ],
+  },
+  {
+    primary_parent_name: "Hannah Park",
+    primary_email: "hannah.park.demo@example.com",
+    primary_phone: "+15555550109",
+    students: [
+      { first_name: "Min", last_name: "Park", grade_level: "9th", lifecycle_status: "waitlist" },
+      { first_name: "Jiwoo", last_name: "Park", grade_level: "3rd", lifecycle_status: "active" },
+    ],
+  },
+  {
+    primary_parent_name: "Tom Williams",
+    primary_email: "t.williams.demo@example.com",
+    primary_phone: "+15555550110",
+    students: [
+      { first_name: "Jack", last_name: "Williams", grade_level: "5th", lifecycle_status: "active" },
+      { first_name: "Lily", last_name: "Williams", grade_level: "7th", lifecycle_status: "active" },
+    ],
   },
 ];
 
@@ -106,6 +190,10 @@ export async function seedDemoDataAction() {
         primary_parent_name: sample.primary_parent_name,
         primary_email: sample.primary_email,
         primary_phone: sample.primary_phone,
+        secondary_parent_name: sample.secondary_parent_name ?? null,
+        secondary_email: sample.secondary_email ?? null,
+        secondary_phone: sample.secondary_phone ?? null,
+        mailing_address: sample.mailing_address ?? null,
         notification_prefs_json: {
           email: true,
           whatsapp: true,
@@ -127,7 +215,7 @@ export async function seedDemoDataAction() {
           first_name: stu.first_name,
           last_name: stu.last_name,
           grade_level: stu.grade_level,
-          lifecycle_status: "active",
+          lifecycle_status: stu.lifecycle_status,
           internal_notes: DEMO_TAG,
         })
         .select("id")
@@ -135,8 +223,14 @@ export async function seedDemoDataAction() {
       if (!student) continue;
       studentsInserted++;
 
-      // Round-robin enroll each student into an existing slot.
-      const slot = eligibleSlots[(studentsInserted - 1) % eligibleSlots.length];
+      // Skip enrollment for leads + waitlisted students so the demo reflects
+      // a realistic mix of pipeline states.
+      if (stu.lifecycle_status === "lead" || stu.lifecycle_status === "waitlist") {
+        continue;
+      }
+
+      // Round-robin enroll active + trial students into an existing slot.
+      const slot = eligibleSlots[enrollmentsInserted % eligibleSlots.length];
       const today = new Date().toISOString().slice(0, 10);
       const { error: enrErr } = await supabase.from("enrollments").insert({
         student_id: student.id,

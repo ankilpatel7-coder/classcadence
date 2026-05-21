@@ -9,11 +9,15 @@ import { signOutAction } from "@/app/login/actions";
 import { Logo } from "@/app/_components/Logo";
 import { MobileNav } from "@/app/_components/MobileNav";
 
-const NAV_LINKS = [
+const BASE_NAV_LINKS = [
   { href: "/tenant", label: "Home" },
   { href: "/tenant/today", label: "Today" },
   { href: "/tenant/households", label: "Households" },
   { href: "/tenant/locations", label: "Locations" },
+];
+
+const ADMIN_NAV_LINKS = [
+  { href: "/tenant/staff", label: "Staff" },
   { href: "/tenant/settings", label: "Settings" },
 ];
 
@@ -60,6 +64,11 @@ export default async function TenantLayout({
     redirect("/login?error=tenant-suspended");
   }
 
+  const navLinks =
+    user.role === "tenant_admin"
+      ? [...BASE_NAV_LINKS, ...ADMIN_NAV_LINKS]
+      : BASE_NAV_LINKS;
+
   return (
     <div className="min-h-screen bg-bg">
       <header className="relative border-b border-line bg-surface">
@@ -74,7 +83,7 @@ export default async function TenantLayout({
           </div>
 
           <nav className="hidden items-center gap-1 md:flex">
-            {NAV_LINKS.map((l) => (
+            {navLinks.map((l) => (
               <NavLink key={l.href} href={l.href} label={l.label} />
             ))}
           </nav>
@@ -93,7 +102,7 @@ export default async function TenantLayout({
             </form>
 
             <MobileNav
-              links={NAV_LINKS}
+              links={navLinks}
               rightExtra={
                 <div className="space-y-2">
                   <p className="text-xs text-muted">
