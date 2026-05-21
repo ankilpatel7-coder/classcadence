@@ -119,6 +119,100 @@ export async function createTenantAction(
   redirect("/admin/tenants");
 }
 
+const UpdateTenantSchema = z.object({
+  id: z.string().uuid("Invalid tenant id."),
+  name: z.string().trim().min(2, "Name must be at least 2 characters."),
+  legal_name: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : null)),
+  default_iana_tz: z.string().trim().min(3, "Timezone is required."),
+  country: z
+    .string()
+    .trim()
+    .length(2, "Use a 2-letter country code (e.g. US).")
+    .transform((v) => v.toUpperCase()),
+  status: z.enum(["active", "suspended"]),
+});
+
+export type UpdateTenantState = {
+  error: string | null;
+  fieldErrors: Partial<Record<keyof z.infer<typeof UpdateTenantSchema>, string>>;
+};
+
+const emptyUpdateFieldErrors: UpdateTenantState["fieldErrors"] = {};
+
+export async function updateTenantAction(
+  _prev: UpdateTenantState,
+  formData: FormData
+): Promise<UpdateTenantState> {
+  const supabase = createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "You must be signed in.", fieldErrors: emptyUpdateFieldErrors };
+  }
+
+  const parsed = UpdateTenantSchema.safeParse({
+    id: formData.get("id"),
+    name: formData.get("name"),
+    legal_name: formData.get("legal_name"),
+    default_iana_tz: formData.get("default_iana_tz"),
+    country: formData.get("country"),
+    status: formData.get("status"),
+  });
+
+  if (!parsed.success) {
+    const fieldErrors: UpdateTenantState["fieldErrors"] = {};
+    for (const issue of parsed.error.issues) {
+      const key = issue.path[0] as keyof UpdateTenantState["fieldErrors"];
+      if (key && !fieldErrors[key]) fieldErrors[key] = issue.message;
+    }
+    return { error: "Fix the errors below and try again.", fieldErrors };
+  }
+
+  const { id, name, legal_name, default_iana_tz, country, status } = parsed.data;
+
+  const { error: updateError } = await supabase
+    .from("tenants")
+    .update({ name, legal_name, default_iana_tz, country, status })
+    .eq("id", id);
+
+  if (updateError) {
+    return {
+      error: updateError.message,
+      fieldErrors: emptyUpdateFieldErrors,
+    };
+  }
+
+  revalidatePath("/admin/tenants");
+  redirect("/admin/tenants");
+}
+
+export async function deleteTenantAction(formData: FormData) {
+  const supabase = createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const id = formData.get("id");
+  if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) {
+    redirect("/admin/tenants?error=invalid-id");
+  }
+
+  const { error } = await supabase.from("tenants").delete().eq("id", id);
+  if (error) {
+    redirect(`/admin/tenants?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/admin/tenants");
+  redirect("/admin/tenants?deleted=1");
+}
+
 async function inviteTenantAdmin(args: {
   tenantId: string;
   email: string;

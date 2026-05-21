@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { DeleteTenantButton } from "./DeleteTenantButton";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,11 @@ type TenantRow = {
   created_at: string;
 };
 
-export default async function TenantsPage() {
+export default async function TenantsPage({
+  searchParams,
+}: {
+  searchParams: { deleted?: string; error?: string };
+}) {
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
     .from("tenants")
@@ -41,6 +46,18 @@ export default async function TenantsPage() {
         </Link>
       </div>
 
+      {searchParams.deleted ? (
+        <div className="rounded-md border border-success/30 bg-success-soft px-4 py-3 text-sm text-success">
+          Tenant deleted.
+        </div>
+      ) : null}
+
+      {searchParams.error ? (
+        <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          {decodeURIComponent(searchParams.error)}
+        </div>
+      ) : null}
+
       {error ? (
         <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
           Failed to load tenants: {error.message}
@@ -65,6 +82,7 @@ export default async function TenantsPage() {
                 <Th>Country</Th>
                 <Th>Status</Th>
                 <Th>Created</Th>
+                <Th className="text-right">Actions</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line bg-surface">
@@ -82,6 +100,18 @@ export default async function TenantsPage() {
                   <Td className="text-muted">
                     {new Date(t.created_at).toLocaleDateString()}
                   </Td>
+                  <Td className="text-right">
+                    <div className="inline-flex items-center gap-2">
+                      <Link
+                        href={`/admin/tenants/${t.id}/edit`}
+                        className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink transition hover:bg-bg"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
+                      </Link>
+                      <DeleteTenantButton tenantId={t.id} tenantName={t.name} />
+                    </div>
+                  </Td>
                 </tr>
               ))}
             </tbody>
@@ -92,9 +122,17 @@ export default async function TenantsPage() {
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
+function Th({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted">
+    <th
+      className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted ${className}`}
+    >
       {children}
     </th>
   );
@@ -114,7 +152,7 @@ function StatusBadge({ status }: { status: "active" | "suspended" }) {
   const styles =
     status === "active"
       ? "bg-success-soft text-success"
-      : "bg-line text-muted";
+      : "bg-warning/10 text-warning";
   return (
     <span
       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${styles}`}
