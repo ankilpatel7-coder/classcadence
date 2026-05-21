@@ -56,7 +56,7 @@ export function ClassroomFields({
         <Field
           id="default_capacity"
           label="Default capacity"
-          hint="The number of students per session unless a slot overrides it."
+          hint="Max students in this room at one time (per session). Time slots can override this individually."
           error={fieldErrors.default_capacity}
           required
         >

@@ -150,8 +150,8 @@ export default async function EditClassroomPage({
         <p className="mt-1 text-xs text-muted">
           Each slot is a recurring window when this classroom runs. Slots must
           sit inside the location&apos;s operating hours for the same weekday.
-          Leave the capacity field blank to use the classroom default
-          ({room.default_capacity}).
+          The capacity field on a slot caps students in that particular session;
+          leave it blank to inherit the classroom default ({room.default_capacity}).
         </p>
         <div className="mt-4">
           {operatingHours.length === 0 ? (
