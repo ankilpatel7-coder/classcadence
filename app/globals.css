@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Brand fonts loaded from Google Fonts via next/font in layout.tsx */
+
+:root {
+  /* Source: ClassCadence_BA_Document.docx Section 3.11 */
+  --color-primary: #1E3A8A;
+  --color-primary-soft: #DBEAFE;
+  --color-primary-strong: #172554;
+  --color-success: #16A34A;
+  --color-success-soft: #DCFCE7;
+  --color-accent: #F97316;
+  --color-accent-soft: #FFEDD5;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+  --color-bg: #FBFAF7;
+  --color-surface: #FFFFFF;
+  --color-text: #1F2937;
+  --color-text-soft: #6B7280;
+  --color-border: #E5E7EB;
+}
+
+html, body {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+body {
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* All headlines use Inter (clean B2B sans). The wordmark uses Fraunces (serif) via .font-wordmark only. */
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-ui), system-ui, sans-serif;
+  letter-spacing: -0.018em;     /* Subtle optical tighten — Inter at large sizes */
+}
+
+.font-wordmark {
+  font-family: var(--font-display), Georgia, serif;
+}
+
+/* Tabular numerals for attendance counts and times */
+.tnum {
+  font-feature-settings: "tnum";
+}
