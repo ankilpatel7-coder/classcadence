@@ -23,6 +23,7 @@ export default async function AdminLayout({
   const { data: profile } = await supabase
     .from("user_profiles")
     .select("role, full_name, email")
+    .eq("id", user.id)
     .single();
 
   if (profile?.role !== "super_admin") redirect("/login");

@@ -25,15 +25,18 @@ export async function signInAction(
   }
 
   const supabase = createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
+  const { data: signIn, error } = await supabase.auth.signInWithPassword(parsed.data);
 
-  if (error) {
+  if (error || !signIn.user) {
     return { error: "Sign-in failed. Check your email and password." };
   }
 
+  // Filter by id explicitly — super_admin RLS lets the caller read every profile,
+  // so .single() would error with PGRST116 if any other profile rows exist.
   const { data: profile } = await supabase
     .from("user_profiles")
     .select("role")
+    .eq("id", signIn.user.id)
     .single();
 
   redirect(profile?.role === "super_admin" ? "/admin/tenants" : "/");

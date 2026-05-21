@@ -130,8 +130,10 @@ async function inviteTenantAdmin(args: {
 
   // Send a Supabase-hosted invite (creates an auth.users row + magic link).
   // The on_auth_user_created trigger then creates a default user_profiles row.
+  // The link lands on /auth/callback which exchanges the PKCE code and forwards
+  // the user to /auth/setup so they can set their own password.
   const { data, error } = await service.auth.admin.inviteUserByEmail(args.email, {
-    redirectTo: `${appUrl}/login`,
+    redirectTo: `${appUrl}/auth/callback?next=/auth/setup`,
     data: { full_name: args.fullName ?? "" },
   });
 
@@ -164,8 +166,10 @@ async function inviteTenantAdmin(args: {
       text:
         `Hi${args.fullName ? ` ${args.fullName}` : ""},\n\n` +
         `Your ClassCadence tenant "${args.tenantName}" has been created. ` +
-        `You should receive a separate sign-in link from Supabase shortly. ` +
-        `Once you set a password, sign in at ${appUrl}/login to add your first location.\n\n` +
+        `Look for a separate email titled "You have been invited" from Supabase ` +
+        `(check spam if you don't see it). Click "Accept Invitation" in that email — ` +
+        `it lands on a page where you can set your password. ` +
+        `After that, you can sign in any time at ${appUrl}/login.\n\n` +
         `— ${fromName}`,
     });
   }
