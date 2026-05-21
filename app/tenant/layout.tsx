@@ -64,7 +64,10 @@ export default async function TenantLayout({
           </div>
           <nav className="flex items-center gap-2">
             <NavLink href="/tenant" label="Home" />
+            <NavLink href="/tenant/today" label="Today" />
+            <NavLink href="/tenant/households" label="Households" />
             <NavLink href="/tenant/locations" label="Locations" />
+            <NavLink href="/tenant/settings" label="Settings" />
           </nav>
           <div className="flex items-center gap-4 text-sm text-muted">
             <span className="hidden md:inline">{user.fullName || user.email}</span>
