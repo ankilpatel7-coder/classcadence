@@ -31,12 +31,31 @@ body {
   font-family: var(--font-ui), system-ui, sans-serif;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
+  /* Ambient depth — two ultra-subtle radial washes layered on the cream bg.
+     Stays in the brand palette (indigo mist + recess orange soft). */
+  background-image:
+    radial-gradient(
+      ellipse 1400px 700px at 50% -100px,
+      rgba(219, 234, 254, 0.55),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 900px 500px at 100% 110%,
+      rgba(255, 237, 213, 0.35),
+      transparent 70%
+    );
+  background-attachment: fixed;
 }
 
 /* All headlines use Inter (clean B2B sans). The wordmark uses Fraunces (serif) via .font-wordmark only. */
 h1, h2, h3, h4, .font-display {
   font-family: var(--font-ui), system-ui, sans-serif;
-  letter-spacing: -0.018em;     /* Subtle optical tighten — Inter at large sizes */
+  letter-spacing: -0.022em;
+  font-feature-settings: "ss01", "cv11";
+}
+
+h1 {
+  font-weight: 600;
 }
 
 .font-wordmark {
@@ -49,7 +68,61 @@ h1, h2, h3, h4, .font-display {
 }
 
 @layer components {
+  /* Form inputs feel slightly pressed into the surface (emboss inverse) */
   .form-input {
-    @apply block w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30;
+    @apply block w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink shadow-press transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30;
+  }
+  .form-input:hover:not(:disabled):not(:focus) {
+    @apply border-line/80;
+  }
+
+  /* Card surface with subtle gradient + top highlight (built into shadow-card)
+     Use directly via Tailwind `shadow-card` on bg-surface containers.
+     This class is for places that want a self-contained card with the gradient. */
+  .card {
+    @apply relative rounded-lg border border-line shadow-card;
+    background-image:
+      linear-gradient(to bottom, rgba(255, 255, 255, 1), rgba(251, 250, 247, 0.6));
+  }
+
+  /* Primary button — embossed look, soft gradient, deeper hover lift */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white shadow-emboss transition active:translate-y-px;
+    background-image: linear-gradient(
+      180deg,
+      #2746a1 0%,
+      var(--color-primary) 55%,
+      var(--color-primary-strong) 100%
+    );
+  }
+  .btn-primary:hover:not(:disabled) {
+    box-shadow:
+      0 2px 4px rgba(15, 23, 42, 0.1),
+      0 12px 24px -8px rgba(30, 58, 138, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+  .btn-primary:disabled {
+    @apply opacity-60;
+  }
+
+  /* Secondary / ghost button */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-line bg-surface px-4 py-2 text-sm font-medium text-ink shadow-emboss transition hover:bg-bg active:translate-y-px;
+  }
+
+  /* Danger button (for delete confirmations) */
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-danger/30 bg-surface px-3 py-1.5 text-xs font-medium text-danger shadow-emboss transition hover:bg-danger/5 active:translate-y-px;
+  }
+
+  /* Section panel — for the rounded-lg/border/bg-surface/p-6/shadow-card combo
+     so we can swap the look in one place if needed. */
+  .panel {
+    @apply rounded-lg border border-line bg-surface shadow-card;
+  }
+
+  /* Subtle bordered chip / pill */
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-line bg-bg/60 px-2 py-0.5 text-xs font-medium text-ink;
   }
 }

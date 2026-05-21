@@ -47,8 +47,19 @@ const config: Config = {
         lg: "16px",
       },
       boxShadow: {
-        card: "0 1px 2px rgba(15,23,42,0.06), 0 4px 12px rgba(15,23,42,0.06)",
-        pop: "0 8px 24px rgba(15,23,42,0.12)",
+        // Card: subtle outer + soft far-shadow + 1px inner highlight at top.
+        card: "0 1px 2px rgba(15,23,42,0.04), 0 12px 32px -12px rgba(15,23,42,0.12), inset 0 1px 0 rgba(255,255,255,0.7)",
+        // Pop: dropdowns, modals, banners.
+        pop: "0 12px 40px -12px rgba(15,23,42,0.22), 0 4px 12px -4px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.7)",
+        // Emboss: raised button look — outer shadow + light edge highlight + dark bottom edge.
+        emboss:
+          "0 1px 2px rgba(15,23,42,0.08), inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(15,23,42,0.06)",
+        // Press: inset for inputs (pressed-into-the-surface feel).
+        press: "inset 0 2px 4px rgba(15,23,42,0.06)",
+        // Lift: on hover, slightly larger shadow.
+        lift: "0 2px 4px rgba(15,23,42,0.06), 0 18px 36px -12px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.7)",
+        // Glow: focus ring fallback / accent.
+        glow: "0 0 0 4px rgba(30,58,138,0.12)",
       },
       // 8px baseline grid: defaults already match. Use space-{1..10}.
     },

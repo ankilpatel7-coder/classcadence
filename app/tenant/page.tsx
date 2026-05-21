@@ -87,29 +87,34 @@ export default async function TenantHomePage() {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-line bg-surface p-4 shadow-card">
-      <p className="text-xs font-medium uppercase tracking-wider text-muted">
+    <div className="card p-4">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-semibold text-ink tnum">{value}</p>
+      <p className="mt-2 text-3xl font-semibold tracking-tight text-ink tnum">
+        {value}
+      </p>
     </div>
   );
 }
 
 function FirstLocationCard() {
   return (
-    <section className="rounded-lg border border-dashed border-primary/30 bg-primary-soft/40 p-8 text-center">
-      <h2 className="text-lg font-semibold text-ink">
+    <section
+      className="relative overflow-hidden rounded-lg border border-primary/15 p-8 text-center shadow-card"
+      style={{
+        backgroundImage:
+          "radial-gradient(ellipse 600px 220px at 50% 0%, rgba(219,234,254,0.85), transparent 70%), linear-gradient(180deg, #ffffff 0%, #fdfcf9 100%)",
+      }}
+    >
+      <h2 className="text-xl font-semibold text-ink">
         Let&apos;s add your first location.
       </h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-muted">
         A location is one physical learning center. It has its own timezone, address,
         and weekly operating hours. You can add more later.
       </p>
-      <Link
-        href="/tenant/locations/new"
-        className="mt-6 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-card transition hover:bg-primary-strong"
-      >
+      <Link href="/tenant/locations/new" className="btn-primary mt-6">
         <Plus className="h-4 w-4" />
         Add a location
       </Link>

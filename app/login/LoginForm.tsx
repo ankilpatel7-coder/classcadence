@@ -8,11 +8,7 @@ const initialState: LoginState = { error: null };
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-white shadow-card transition hover:bg-primary-strong disabled:opacity-60"
-    >
+    <button type="submit" disabled={pending} className="btn-primary w-full py-2.5">
       {pending ? "Signing in…" : "Sign in"}
     </button>
   );

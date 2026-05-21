@@ -40,10 +40,7 @@ export default async function HouseholdsPage({
             siblings share contact info and notification preferences.
           </p>
         </div>
-        <Link
-          href="/tenant/households/new"
-          className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-card transition hover:bg-primary-strong sm:w-auto"
-        >
+        <Link href="/tenant/households/new" className="btn-primary w-full sm:w-auto">
           <Plus className="h-4 w-4" />
           Add household
         </Link>
@@ -65,7 +62,7 @@ export default async function HouseholdsPage({
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-card">
+      <div className="panel overflow-hidden">
         {rows.length === 0 ? (
           <div className="px-6 py-12 text-center">
             <Users className="mx-auto h-6 w-6 text-muted" />
@@ -78,7 +75,7 @@ export default async function HouseholdsPage({
               <li key={h.id}>
                 <Link
                   href={`/tenant/households/${h.id}/edit`}
-                  className="flex items-center justify-between px-4 py-3 transition hover:bg-bg"
+                  className="group flex items-center justify-between px-4 py-3 transition hover:bg-bg/70"
                 >
                   <div>
                     <p className="text-sm font-medium text-ink">
@@ -98,7 +95,7 @@ export default async function HouseholdsPage({
                       <p className="mt-1 text-xs text-muted">No students yet</p>
                     )}
                   </div>
-                  <Pencil className="h-4 w-4 text-muted" />
+                  <Pencil className="h-4 w-4 text-muted transition group-hover:text-primary" />
                 </Link>
               </li>
             ))}

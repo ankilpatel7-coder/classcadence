@@ -41,10 +41,7 @@ export default async function LocationsPage({
           </p>
         </div>
         {canEdit ? (
-          <Link
-            href="/tenant/locations/new"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-card transition hover:bg-primary-strong sm:w-auto"
-          >
+          <Link href="/tenant/locations/new" className="btn-primary w-full sm:w-auto">
             <Plus className="h-4 w-4" />
             Add location
           </Link>

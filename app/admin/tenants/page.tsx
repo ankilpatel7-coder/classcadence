@@ -37,10 +37,7 @@ export default async function TenantsPage({
             All learning centers on the ClassCadence platform.
           </p>
         </div>
-        <Link
-          href="/admin/tenants/new"
-          className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-card transition hover:bg-primary-strong sm:w-auto"
-        >
+        <Link href="/admin/tenants/new" className="btn-primary w-full sm:w-auto">
           <Plus className="h-4 w-4" />
           Create tenant
         </Link>

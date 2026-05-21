@@ -70,8 +70,8 @@ export default async function TenantLayout({
       : BASE_NAV_LINKS;
 
   return (
-    <div className="min-h-screen bg-bg">
-      <header className="relative border-b border-line bg-surface">
+    <div className="min-h-screen">
+      <header className="relative border-b border-line/70 bg-surface/80 backdrop-blur-md shadow-[0_1px_0_rgba(255,255,255,0.6)_inset,0_8px_24px_-16px_rgba(15,23,42,0.10)]">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 md:px-6 md:py-4">
           <div className="flex min-w-0 items-center gap-3 md:gap-6">
             <Link href="/tenant" className="shrink-0">
@@ -93,10 +93,7 @@ export default async function TenantLayout({
               {user.fullName || user.email}
             </span>
             <form action={signOutAction} className="hidden md:block">
-              <button
-                type="submit"
-                className="rounded-md border border-line bg-surface px-3 py-1.5 text-sm text-ink transition hover:bg-bg"
-              >
+              <button type="submit" className="btn-secondary !px-3 !py-1.5 text-sm">
                 Sign out
               </button>
             </form>
@@ -132,7 +129,7 @@ function NavLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="rounded-md px-3 py-1.5 text-sm font-medium text-ink transition hover:bg-bg"
+      className="rounded-md px-3 py-1.5 text-sm font-medium text-muted transition hover:bg-bg hover:text-ink"
     >
       {label}
     </Link>

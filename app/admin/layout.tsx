@@ -30,8 +30,8 @@ export default async function AdminLayout({
   if (profile?.role !== "super_admin") redirect("/login");
 
   return (
-    <div className="min-h-screen bg-bg">
-      <header className="border-b border-line bg-surface">
+    <div className="min-h-screen">
+      <header className="border-b border-line/70 bg-surface/80 backdrop-blur-md shadow-[0_1px_0_rgba(255,255,255,0.6)_inset,0_8px_24px_-16px_rgba(15,23,42,0.10)]">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 md:px-6 md:py-4">
           <div className="flex min-w-0 items-center gap-3 md:gap-6">
             <Link href="/admin/tenants" className="shrink-0">
@@ -46,10 +46,7 @@ export default async function AdminLayout({
               {profile.full_name || profile.email}
             </span>
             <form action={signOutAction}>
-              <button
-                type="submit"
-                className="rounded-md border border-line bg-surface px-3 py-1.5 text-sm text-ink transition hover:bg-bg"
-              >
+              <button type="submit" className="btn-secondary !px-3 !py-1.5 text-sm">
                 Sign out
               </button>
             </form>

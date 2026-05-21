@@ -227,11 +227,13 @@ function Card({
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md border border-line bg-bg/40 p-3">
-      <p className="text-xs font-medium uppercase tracking-wider text-muted">
+    <div className="rounded-md border border-line bg-bg/60 p-3 shadow-press">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted">
         {label}
       </p>
-      <p className="mt-1 text-xl font-semibold text-ink tnum">{value}</p>
+      <p className="mt-1 text-2xl font-semibold tracking-tight text-ink tnum">
+        {value}
+      </p>
     </div>
   );
 }
