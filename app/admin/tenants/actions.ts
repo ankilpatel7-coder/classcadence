@@ -192,6 +192,156 @@ export async function updateTenantAction(
   redirect("/admin/tenants");
 }
 
+const UpdateAdminSchema = z.object({
+  admin_id: z.string().uuid("Invalid admin id."),
+  tenant_id: z.string().uuid("Invalid tenant id."),
+  full_name: z.string().trim().max(120),
+});
+
+export type UpdateAdminState = { error: string | null; success: boolean };
+
+export async function updateAdminProfileAction(
+  _prev: UpdateAdminState,
+  formData: FormData
+): Promise<UpdateAdminState> {
+  const supabase = createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in.", success: false };
+
+  const parsed = UpdateAdminSchema.safeParse({
+    admin_id: formData.get("admin_id"),
+    tenant_id: formData.get("tenant_id"),
+    full_name: formData.get("full_name"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input.", success: false };
+  }
+
+  // Service role: super_admin RLS allows profile writes, but using service role
+  // keeps tenant_id-scoped writes simple and consistent with invite flow.
+  const service = createSupabaseServiceClient();
+  const { error } = await service
+    .from("user_profiles")
+    .update({ full_name: parsed.data.full_name || null })
+    .eq("id", parsed.data.admin_id)
+    .eq("tenant_id", parsed.data.tenant_id);
+
+  if (error) return { error: error.message, success: false };
+
+  revalidatePath(`/admin/tenants/${parsed.data.tenant_id}/edit`);
+  return { error: null, success: true };
+}
+
+export async function removeAdminAction(formData: FormData) {
+  const supabase = createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const adminId = formData.get("admin_id");
+  const tenantId = formData.get("tenant_id");
+  if (
+    typeof adminId !== "string" ||
+    typeof tenantId !== "string" ||
+    !/^[0-9a-f-]{36}$/i.test(adminId) ||
+    !/^[0-9a-f-]{36}$/i.test(tenantId)
+  ) {
+    redirect(`/admin/tenants/${tenantId ?? ""}/edit?error=invalid-id`);
+  }
+
+  const tenantIdStr = tenantId as string;
+  const adminIdStr = adminId as string;
+
+  // Verify the user really is an admin of this tenant before deleting.
+  const service = createSupabaseServiceClient();
+  const { data: profile } = await service
+    .from("user_profiles")
+    .select("id")
+    .eq("id", adminIdStr)
+    .eq("tenant_id", tenantIdStr)
+    .maybeSingle();
+
+  if (!profile) {
+    redirect(`/admin/tenants/${tenantIdStr}/edit?error=not-an-admin`);
+  }
+
+  // Deleting the auth user cascades to user_profiles via the FK on .id.
+  const { error: deleteError } = await service.auth.admin.deleteUser(adminIdStr);
+  if (deleteError) {
+    redirect(
+      `/admin/tenants/${tenantIdStr}/edit?error=${encodeURIComponent(deleteError.message)}`
+    );
+  }
+
+  revalidatePath(`/admin/tenants/${tenantIdStr}/edit`);
+  redirect(`/admin/tenants/${tenantIdStr}/edit?removed=1`);
+}
+
+const InviteAdminSchema = z.object({
+  tenant_id: z.string().uuid("Invalid tenant id."),
+  email: z.string().trim().email("Enter a valid email."),
+  full_name: z
+    .string()
+    .trim()
+    .max(120)
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+});
+
+export type InviteAdminState = {
+  error: string | null;
+  success: boolean;
+};
+
+export async function inviteAdminAction(
+  _prev: InviteAdminState,
+  formData: FormData
+): Promise<InviteAdminState> {
+  const supabase = createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in.", success: false };
+
+  const parsed = InviteAdminSchema.safeParse({
+    tenant_id: formData.get("tenant_id"),
+    email: formData.get("email"),
+    full_name: formData.get("full_name"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input.", success: false };
+  }
+
+  // Look up the tenant name for the welcome email body.
+  const { data: tenant, error: tenantError } = await supabase
+    .from("tenants")
+    .select("name")
+    .eq("id", parsed.data.tenant_id)
+    .maybeSingle();
+
+  if (tenantError || !tenant) {
+    return { error: "Tenant not found.", success: false };
+  }
+
+  try {
+    await inviteTenantAdmin({
+      tenantId: parsed.data.tenant_id,
+      email: parsed.data.email,
+      fullName: parsed.data.full_name,
+      tenantName: tenant.name,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Invite failed.";
+    return { error: message, success: false };
+  }
+
+  revalidatePath(`/admin/tenants/${parsed.data.tenant_id}/edit`);
+  return { error: null, success: true };
+}
+
 export async function deleteTenantAction(formData: FormData) {
   const supabase = createSupabaseServerClient();
   const {
