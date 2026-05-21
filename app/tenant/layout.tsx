@@ -6,6 +6,7 @@ import {
 } from "@/lib/supabase/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { signOutAction } from "@/app/login/actions";
+import { Logo } from "@/app/_components/Logo";
 
 export const metadata = {
   title: "ClassCadence",
@@ -55,8 +56,8 @@ export default async function TenantLayout({
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-6">
-            <Link href="/tenant" className="font-wordmark text-xl text-primary">
-              ClassCadence
+            <Link href="/tenant">
+              <Logo />
             </Link>
             <span className="hidden text-sm text-muted md:inline">
               {tenant?.name ?? "Your center"}

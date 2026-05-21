@@ -1,0 +1,37 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+<defs>
+ <linearGradient id="tile" x1="0" y1="0" x2="0.35" y2="1">
+   <stop offset="0" stop-color="#0C2A20"/><stop offset="1" stop-color="#03130D"/>
+ </linearGradient>
+ <radialGradient id="glow" cx="0.5" cy="0.36" r="0.7">
+   <stop offset="0" stop-color="#1FB67E" stop-opacity="0.40"/>
+   <stop offset="1" stop-color="#1FB67E" stop-opacity="0"/>
+ </radialGradient>
+ <linearGradient id="fFace" x1="0.2" y1="0" x2="0.55" y2="1">
+   <stop offset="0" stop-color="#9FF3CD"/><stop offset="0.5" stop-color="#2BC98A"/><stop offset="1" stop-color="#118A5C"/>
+ </linearGradient>
+ <linearGradient id="bFace" x1="0.2" y1="0" x2="0.55" y2="1">
+   <stop offset="0" stop-color="#62D9A6"/><stop offset="0.5" stop-color="#1AA876"/><stop offset="1" stop-color="#0B6845"/>
+ </linearGradient>
+ <linearGradient id="hiF" x1="0" y1="0" x2="0" y2="1">
+   <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.85"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+ </linearGradient>
+ <linearGradient id="hiB" x1="0" y1="0" x2="0" y2="1">
+   <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.5"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+ </linearGradient>
+ <filter id="backShadow" x="-40%" y="-40%" width="180%" height="180%">
+   <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.30"/>
+ </filter>
+ <filter id="frontShadow" x="-50%" y="-50%" width="200%" height="200%">
+   <feDropShadow dx="-10" dy="12" stdDeviation="14" flood-color="#000" flood-opacity="0.38"/>
+ </filter>
+</defs>
+ <rect width="512" height="512" rx="116" fill="url(#tile)"/>
+ <rect width="512" height="512" rx="116" fill="url(#glow)"/>
+ <rect x="26" y="22" width="460" height="170" rx="92" fill="#ffffff" opacity="0.04"/>
+
+ <g filter="url(#backShadow)"><path d="M 260.65 169.01 A 118 118 0 1 0 260.65 354.99 L 234.79 321.89 A 76 76 0 1 1 234.79 202.11 Z" fill="url(#bFace)"/><circle cx="247.72" cy="185.56" r="21.0" fill="url(#bFace)"/><circle cx="247.72" cy="338.44" r="21.0" fill="url(#bFace)"/></g>
+ <path d="M 252.31 166.66 A 115 115 0 1 0 252.31 357.34 L 246.72 349.05 A 105 105 0 1 1 246.72 174.95 Z" fill="url(#hiB)" opacity="0.9"/>
+ <g filter="url(#frontShadow)"><path d="M 372.65 169.01 A 118 118 0 1 0 372.65 354.99 L 346.79 321.89 A 76 76 0 1 1 346.79 202.11 Z" fill="url(#fFace)"/><circle cx="359.72" cy="185.56" r="21.0" fill="url(#fFace)"/><circle cx="359.72" cy="338.44" r="21.0" fill="url(#fFace)"/></g>
+ <path d="M 364.31 166.66 A 115 115 0 1 0 364.31 357.34 L 358.72 349.05 A 105 105 0 1 1 358.72 174.95 Z" fill="url(#hiF)" opacity="0.9"/>
+</svg>

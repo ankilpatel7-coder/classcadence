@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { Logo } from "@/app/_components/Logo";
 import { SetupForm } from "./SetupForm";
 
 export const metadata = {
@@ -25,11 +26,8 @@ export default async function SetupPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-bg px-4 py-12">
       <div className="w-full max-w-sm">
-        <Link
-          href="/"
-          className="mb-8 block text-center font-wordmark text-2xl text-primary"
-        >
-          ClassCadence
+        <Link href="/" className="mb-8 flex justify-center">
+          <Logo size={40} />
         </Link>
 
         <div className="rounded-lg border border-line bg-surface p-6 shadow-card">
