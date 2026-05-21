@@ -103,20 +103,53 @@ export async function createTenantAction(
     };
   }
 
-  // 3. (Optional) Invite the Tenant Admin. Best-effort: log + continue on failure.
+  // 3. (Optional) Invite the Tenant Admin. Surface failures via query string so the
+  //    operator can see what happened on the next page.
+  let inviteError: string | null = null;
   if (admin_email) {
-    await inviteTenantAdmin({
-      tenantId: tenant.id,
-      email: admin_email,
-      fullName: admin_name,
-      tenantName: name,
-    }).catch((err) => {
+    try {
+      await inviteTenantAdmin({
+        tenantId: tenant.id,
+        email: admin_email,
+        fullName: admin_name,
+        tenantName: name,
+      });
+    } catch (err) {
       console.error("[tenant-invite] failed:", err);
-    });
+      inviteError = friendlyInviteError(err);
+    }
   }
 
   revalidatePath("/admin/tenants");
+
+  // If an admin email was provided, drop into the tenant edit page so the operator
+  // can immediately see whether the admin was attached (and retry if not).
+  if (admin_email) {
+    const qs = inviteError
+      ? `?invite_error=${encodeURIComponent(inviteError)}`
+      : "";
+    redirect(`/admin/tenants/${tenant.id}/edit${qs}`);
+  }
+
   redirect("/admin/tenants");
+}
+
+function friendlyInviteError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  if (/already.*registered|already.*been.*registered|user.*already.*exists/i.test(raw)) {
+    return (
+      "An auth user with that email already exists. Delete it under Supabase " +
+      "→ Authentication → Users (or pick a different email), then use the " +
+      "Invite form below to send a fresh invite."
+    );
+  }
+  if (/redirect.*not.*allowed|not.*in.*allow.*list|invalid.*redirect/i.test(raw)) {
+    return (
+      "Supabase rejected the redirect URL. Add this app's URL to " +
+      "Authentication → URL Configuration → Redirect URLs in Supabase."
+    );
+  }
+  return `Invite failed: ${raw}`;
 }
 
 const UpdateTenantSchema = z.object({

@@ -27,7 +27,7 @@ export default async function EditTenantPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { removed?: string; error?: string };
+  searchParams: { removed?: string; error?: string; invite_error?: string };
 }) {
   const supabase = createSupabaseServerClient();
   const { data: tenant, error } = await supabase
@@ -78,6 +78,13 @@ export default async function EditTenantPage({
       {searchParams.error ? (
         <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
           {decodeURIComponent(searchParams.error)}
+        </div>
+      ) : null}
+
+      {searchParams.invite_error ? (
+        <div className="rounded-md border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-ink">
+          <p className="font-medium">The tenant was created, but the admin invite failed.</p>
+          <p className="mt-1 text-sm">{decodeURIComponent(searchParams.invite_error)}</p>
         </div>
       ) : null}
 
