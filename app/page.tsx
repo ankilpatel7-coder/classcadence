@@ -13,6 +13,7 @@ import {
   Mail,
   Calendar,
   ShieldCheck,
+  type LucideIcon,
 } from "lucide-react";
 
 export default function HomePage() {
@@ -524,7 +525,7 @@ function FeatureCard({
   title,
   body,
 }: {
-  Icon: React.ComponentType<{ size?: number; className?: string }>;
+  Icon: LucideIcon;
   title: string;
   body: string;
 }) {
