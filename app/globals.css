@@ -125,4 +125,26 @@ h1 {
   .chip {
     @apply inline-flex items-center gap-1 rounded-full border border-line bg-bg/60 px-2 py-0.5 text-xs font-medium text-ink;
   }
+
+  /* Section eyebrow — small uppercase label with an indigo accent dot */
+  .section-eyebrow {
+    @apply flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted;
+  }
+  .section-eyebrow::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.12);
+  }
+}
+
+/* Smooth focus rings for buttons + links */
+button:focus-visible,
+a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(30, 58, 138, 0.18);
+  border-radius: 6px;
 }

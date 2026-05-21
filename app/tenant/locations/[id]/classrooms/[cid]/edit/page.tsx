@@ -6,10 +6,10 @@ import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { EditClassroomForm } from "./EditClassroomForm";
 import { DeleteClassroomButton } from "./DeleteClassroomButton";
 import {
-  TimeSlotsEditor,
+  TimeSlotsGridEditor,
   type HoursWindow,
-  type Slot,
-} from "./TimeSlotsEditor";
+  type ExistingSlot,
+} from "./TimeSlotsGridEditor";
 
 export const metadata = { title: "Edit classroom — ClassCadence" };
 
@@ -61,7 +61,7 @@ export default async function EditClassroomPage({
       .eq("location_id", params.id),
     supabase
       .from("time_slots")
-      .select("weekday, start_time, end_time, capacity_override, notes")
+      .select("id, weekday, start_time, end_time")
       .eq("classroom_id", params.cid)
       .eq("status", "active"),
   ]);
@@ -73,12 +73,11 @@ export default async function EditClassroomPage({
   })) as HoursWindow[];
 
   const slots = (slotsData ?? []).map((s) => ({
+    id: s.id,
     weekday: s.weekday as Weekday,
     start_time: String(s.start_time).slice(0, 5),
     end_time: String(s.end_time).slice(0, 5),
-    capacity_override: s.capacity_override,
-    notes: s.notes,
-  })) as Slot[];
+  })) as ExistingSlot[];
 
   const canEdit =
     user.role === "tenant_admin" ||
@@ -148,24 +147,17 @@ export default async function EditClassroomPage({
           Weekly time slots
         </h2>
         <p className="mt-1 text-xs text-muted">
-          Each slot is a recurring window when this classroom runs. Slots must
-          sit inside the location&apos;s operating hours for the same weekday.
-          The capacity field on a slot caps students in that particular session;
-          leave it blank to inherit the classroom default ({room.default_capacity}).
+          Tap any 30-minute cell during operating hours to make it a recurring
+          slot for this classroom. Tap an existing slot to mark it for removal.
+          Default capacity {room.default_capacity}.
         </p>
         <div className="mt-4">
-          {operatingHours.length === 0 ? (
-            <div className="rounded-md border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-ink">
-              No operating hours set for this location yet. Add them on the
-              location page first — slot creation is disabled until then.
-            </div>
-          ) : null}
-          <TimeSlotsEditor
+          <TimeSlotsGridEditor
             classroomId={room.id}
             locationId={room.location_id}
-            defaultCapacity={room.default_capacity}
-            initialSlots={slots}
+            classroomColor={room.color}
             operatingHours={operatingHours}
+            existingSlots={slots}
           />
         </div>
       </section>

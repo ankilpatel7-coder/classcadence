@@ -164,33 +164,17 @@ export async function deleteClassroomAction(formData: FormData) {
 
 // ===================== Time slots =====================
 
-const TimeSlotInputSchema = z.object({
+const NewCellSchema = z.object({
   weekday: z.enum(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]),
   start_time: z.string().regex(/^\d{2}:\d{2}$/, "Invalid start time."),
   end_time: z.string().regex(/^\d{2}:\d{2}$/, "Invalid end time."),
-  capacity_override: z
-    .union([z.string(), z.number(), z.null()])
-    .optional()
-    .transform((v) => {
-      if (v === null || v === undefined || v === "") return null;
-      const n = Number(v);
-      return Number.isFinite(n) ? n : null;
-    })
-    .refine((v) => v === null || (Number.isInteger(v) && v >= 1 && v <= 500), {
-      message: "Capacity override must be an integer 1–500 or blank.",
-    }),
-  notes: z
-    .string()
-    .max(500)
-    .optional()
-    .nullable()
-    .transform((v) => (v && v.length > 0 ? v : null)),
 });
 
 const TimeSlotsPayloadSchema = z.object({
   classroom_id: z.string().uuid(),
   location_id: z.string().uuid(),
-  slots: z.array(TimeSlotInputSchema),
+  added_cells: z.array(NewCellSchema),
+  removed_slot_ids: z.array(z.string().uuid()),
 });
 
 export type TimeSlotsState = { error: string | null; success: boolean };
@@ -233,10 +217,13 @@ export async function saveTimeSlotsAction(
     return { error: "Not allowed.", success: false };
   }
 
-  let slots: unknown = [];
+  let addedCells: unknown = [];
+  let removedSlotIds: unknown = [];
   try {
-    const raw = formData.get("slots");
-    slots = raw ? JSON.parse(String(raw)) : [];
+    const addedRaw = formData.get("added_cells");
+    const removedRaw = formData.get("removed_slot_ids");
+    addedCells = addedRaw ? JSON.parse(String(addedRaw)) : [];
+    removedSlotIds = removedRaw ? JSON.parse(String(removedRaw)) : [];
   } catch {
     return { error: "Invalid slots payload.", success: false };
   }
@@ -244,7 +231,8 @@ export async function saveTimeSlotsAction(
   const parsed = TimeSlotsPayloadSchema.safeParse({
     classroom_id: formData.get("classroom_id"),
     location_id: formData.get("location_id"),
-    slots,
+    added_cells: addedCells,
+    removed_slot_ids: removedSlotIds,
   });
   if (!parsed.success) {
     return {
@@ -253,8 +241,7 @@ export async function saveTimeSlotsAction(
     };
   }
 
-  // Validate close > open + overlap detection + fit-within-hours.
-  for (const s of parsed.data.slots) {
+  for (const s of parsed.data.added_cells) {
     if (s.end_time <= s.start_time) {
       return {
         error: `End time must be after start time (${s.weekday}).`,
@@ -262,61 +249,70 @@ export async function saveTimeSlotsAction(
       };
     }
   }
-  for (let i = 0; i < parsed.data.slots.length; i++) {
-    for (let j = i + 1; j < parsed.data.slots.length; j++) {
-      if (slotsOverlap(parsed.data.slots[i], parsed.data.slots[j])) {
-        const a = parsed.data.slots[i];
-        const b = parsed.data.slots[j];
-        return {
-          error:
-            `Overlapping slots on ${a.weekday.toUpperCase()}: ` +
-            `${a.start_time}–${a.end_time} and ${b.start_time}–${b.end_time}.`,
-          success: false,
-        };
-      }
-    }
-  }
 
-  // Fetch operating hours for FR-TS-03 validation.
+  // FR-TS-03: every added cell must sit inside operating hours for that weekday.
   const supabase = createSupabaseServerClient();
   const { data: hoursData } = await supabase
     .from("operating_hours_rules")
     .select("weekday, open_time, close_time")
     .eq("location_id", parsed.data.location_id);
-
   const hours = (hoursData ?? []) as HoursRule[];
+
   if (hours.length > 0) {
-    for (const s of parsed.data.slots) {
+    for (const s of parsed.data.added_cells) {
       if (!slotFitsHours(s, hours)) {
         return {
           error:
-            `Slot on ${s.weekday.toUpperCase()} ${s.start_time}–${s.end_time} ` +
-            `falls outside the location's operating hours for that day. ` +
-            `Update operating hours first or move the slot.`,
+            `${s.weekday.toUpperCase()} ${s.start_time}–${s.end_time} is ` +
+            `outside the location's operating hours for that day.`,
           success: false,
         };
       }
     }
   }
 
-  // Replace-all semantics for this classroom.
-  const { error: deleteError } = await supabase
-    .from("time_slots")
-    .delete()
-    .eq("classroom_id", parsed.data.classroom_id);
-  if (deleteError) return { error: deleteError.message, success: false };
+  // 1. For each removed slot, soft-delete (status=inactive) if it has any
+  //    enrollments referencing it; hard-delete otherwise. This protects the
+  //    REFERENCES enrollments(time_slot_id) ON DELETE RESTRICT relationship.
+  if (parsed.data.removed_slot_ids.length > 0) {
+    const { data: refRows } = await supabase
+      .from("enrollments")
+      .select("time_slot_id")
+      .in("time_slot_id", parsed.data.removed_slot_ids);
+    const refSet = new Set(
+      (refRows ?? []).map((r) => r.time_slot_id as string)
+    );
+    const softTargets = parsed.data.removed_slot_ids.filter((id) => refSet.has(id));
+    const hardTargets = parsed.data.removed_slot_ids.filter(
+      (id) => !refSet.has(id)
+    );
 
-  if (parsed.data.slots.length > 0) {
-    const inserts = parsed.data.slots.map((s) => ({
+    if (softTargets.length > 0) {
+      const { error } = await supabase
+        .from("time_slots")
+        .update({ status: "inactive" })
+        .in("id", softTargets);
+      if (error) return { error: error.message, success: false };
+    }
+    if (hardTargets.length > 0) {
+      const { error } = await supabase
+        .from("time_slots")
+        .delete()
+        .in("id", hardTargets);
+      if (error) return { error: error.message, success: false };
+    }
+  }
+
+  // 2. Insert new cells.
+  if (parsed.data.added_cells.length > 0) {
+    const inserts = parsed.data.added_cells.map((s) => ({
       classroom_id: parsed.data.classroom_id,
       weekday: s.weekday,
       start_time: s.start_time,
       end_time: s.end_time,
-      capacity_override: s.capacity_override,
-      notes: s.notes,
     }));
-    const { error: insertError } = await supabase.from("time_slots").insert(inserts);
-    if (insertError) return { error: insertError.message, success: false };
+    const { error } = await supabase.from("time_slots").insert(inserts);
+    if (error) return { error: error.message, success: false };
   }
 
   revalidatePath(
