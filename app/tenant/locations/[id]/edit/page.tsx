@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Plus } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { getTimezoneGroups } from "@/lib/timezones";
@@ -8,6 +8,15 @@ import { EditLocationForm } from "./EditLocationForm";
 import { HoursEditor, type HoursWindow } from "./HoursEditor";
 import { HolidaysEditor, type Holiday } from "./HolidaysEditor";
 import { DeleteLocationButton } from "./DeleteLocationButton";
+
+type ClassroomSummary = {
+  id: string;
+  name: string;
+  default_capacity: number;
+  color: string;
+  status: "active" | "inactive";
+  slot_count: number;
+};
 
 export const metadata = { title: "Edit location — ClassCadence" };
 
@@ -38,6 +47,7 @@ export default async function EditLocationPage({
     saved?: string;
     error?: string;
     holiday_deleted?: string;
+    classroom_deleted?: string;
   };
 }) {
   const user = await getCurrentUserOrRedirect();
@@ -54,17 +64,35 @@ export default async function EditLocationPage({
   if (error || !location) notFound();
   const loc = location as LocationRow;
 
-  const [{ data: hoursData }, { data: holidaysData }] = await Promise.all([
-    supabase
-      .from("operating_hours_rules")
-      .select("weekday, open_time, close_time")
-      .eq("location_id", loc.id),
-    supabase
-      .from("holiday_closures")
-      .select("id, start_date, end_date, reason")
-      .eq("location_id", loc.id)
-      .order("start_date", { ascending: true }),
-  ]);
+  const [{ data: hoursData }, { data: holidaysData }, { data: classroomsData }] =
+    await Promise.all([
+      supabase
+        .from("operating_hours_rules")
+        .select("weekday, open_time, close_time")
+        .eq("location_id", loc.id),
+      supabase
+        .from("holiday_closures")
+        .select("id, start_date, end_date, reason")
+        .eq("location_id", loc.id)
+        .order("start_date", { ascending: true }),
+      supabase
+        .from("classrooms")
+        .select("id, name, default_capacity, color, status, time_slots(id)")
+        .eq("location_id", loc.id)
+        .order("created_at", { ascending: true }),
+    ]);
+
+  const classrooms: ClassroomSummary[] = (classroomsData ?? []).map((c) => {
+    const slots = (c as { time_slots: { id: string }[] | null }).time_slots;
+    return {
+      id: c.id,
+      name: c.name,
+      default_capacity: c.default_capacity,
+      color: c.color,
+      status: c.status as "active" | "inactive",
+      slot_count: Array.isArray(slots) ? slots.length : 0,
+    };
+  });
 
   const hours = (hoursData ?? []).map((r) => ({
     weekday: r.weekday as HoursWindow["weekday"],
@@ -114,6 +142,11 @@ export default async function EditLocationPage({
           Closure removed.
         </div>
       ) : null}
+      {searchParams.classroom_deleted ? (
+        <div className="rounded-md border border-success/30 bg-success-soft px-4 py-3 text-sm text-success">
+          Classroom deleted.
+        </div>
+      ) : null}
       {searchParams.error ? (
         <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
           {decodeURIComponent(searchParams.error)}
@@ -140,6 +173,70 @@ export default async function EditLocationPage({
         </p>
         <div className="mt-4">
           <HoursEditor locationId={loc.id} initialRules={hours} />
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-line bg-surface p-6 shadow-card">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
+            Classrooms
+          </h2>
+          {canEdit ? (
+            <Link
+              href={`/tenant/locations/${loc.id}/classrooms/new`}
+              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+            >
+              <Plus className="h-4 w-4" />
+              Add classroom
+            </Link>
+          ) : null}
+        </div>
+        <p className="mt-1 text-xs text-muted">
+          Rooms inside this location. Each holds its own weekly time slots.
+        </p>
+
+        <div className="mt-4 space-y-2">
+          {classrooms.length === 0 ? (
+            <p className="rounded-md border border-dashed border-line bg-bg/40 px-4 py-6 text-center text-sm text-muted">
+              No classrooms yet. Add one to start setting up weekly time slots.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {classrooms.map((c) => (
+                <li key={c.id}>
+                  <Link
+                    href={`/tenant/locations/${loc.id}/classrooms/${c.id}/edit`}
+                    className="flex items-center justify-between rounded-md border border-line bg-surface px-4 py-3 transition hover:bg-bg"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        aria-hidden
+                        style={{ backgroundColor: c.color }}
+                        className="h-6 w-6 rounded-md border border-line"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-ink">{c.name}</p>
+                        <p className="text-xs text-muted">
+                          {c.slot_count} slot{c.slot_count === 1 ? "" : "s"}
+                          {" · "}
+                          capacity {c.default_capacity}
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        c.status === "active"
+                          ? "bg-success-soft text-success"
+                          : "bg-warning/10 text-warning"
+                      }`}
+                    >
+                      {c.status}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
 
