@@ -33,7 +33,7 @@ export default async function LocationsPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-ink">Locations</h1>
           <p className="mt-1 text-sm text-muted">
@@ -43,7 +43,7 @@ export default async function LocationsPage({
         {canEdit ? (
           <Link
             href="/tenant/locations/new"
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-card transition hover:bg-primary-strong"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-card transition hover:bg-primary-strong sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             Add location
@@ -69,43 +69,39 @@ export default async function LocationsPage({
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-card">
-        {locations.length === 0 ? (
-          <div className="px-6 py-12 text-center">
-            <MapPin className="mx-auto h-6 w-6 text-muted" />
-            <p className="mt-3 text-sm text-muted">No locations yet.</p>
-            {canEdit ? (
-              <p className="mt-1 text-sm text-muted">
-                Add your first one to get started.
-              </p>
-            ) : null}
-          </div>
-        ) : (
-          <table className="min-w-full divide-y divide-line">
-            <thead className="bg-bg">
-              <tr>
-                <Th>Name</Th>
-                <Th>City / region</Th>
-                <Th>Timezone</Th>
-                <Th>Status</Th>
-                <Th className="text-right">Actions</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line bg-surface">
-              {locations.map((l) => (
-                <tr key={l.id}>
-                  <Td>
-                    <span className="font-medium text-ink">{l.name}</span>
-                  </Td>
-                  <Td>
-                    {[l.city, l.region].filter(Boolean).join(", ") || (
-                      <span className="text-muted">—</span>
-                    )}
-                  </Td>
-                  <Td className="font-mono text-xs">{l.iana_timezone}</Td>
-                  <Td>
+      {locations.length === 0 ? (
+        <div className="rounded-lg border border-line bg-surface px-6 py-12 text-center shadow-card">
+          <MapPin className="mx-auto h-6 w-6 text-muted" />
+          <p className="mt-3 text-sm text-muted">No locations yet.</p>
+          {canEdit ? (
+            <p className="mt-1 text-sm text-muted">
+              Add your first one to get started.
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <>
+          <ul className="space-y-3 md:hidden">
+            {locations.map((l) => (
+              <li
+                key={l.id}
+                className="rounded-lg border border-line bg-surface p-4 shadow-card"
+              >
+                <Link
+                  href={`/tenant/locations/${l.id}/edit`}
+                  className="block"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-medium text-ink">
+                        {l.name}
+                      </p>
+                      <p className="truncate text-xs text-muted">
+                        {[l.city, l.region].filter(Boolean).join(", ") || "—"}
+                      </p>
+                    </div>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
                         l.status === "active"
                           ? "bg-success-soft text-success"
                           : "bg-warning/10 text-warning"
@@ -113,22 +109,69 @@ export default async function LocationsPage({
                     >
                       {l.status}
                     </span>
-                  </Td>
-                  <Td className="text-right">
-                    <Link
-                      href={`/tenant/locations/${l.id}/edit`}
-                      className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink transition hover:bg-bg"
-                    >
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-xs text-muted">
+                    <span className="font-mono">{l.iana_timezone}</span>
+                    <span className="inline-flex items-center gap-1 text-primary">
                       <Pencil className="h-3.5 w-3.5" />
                       Edit
-                    </Link>
-                  </Td>
+                    </span>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden overflow-hidden rounded-lg border border-line bg-surface shadow-card md:block">
+            <table className="min-w-full divide-y divide-line">
+              <thead className="bg-bg">
+                <tr>
+                  <Th>Name</Th>
+                  <Th>City / region</Th>
+                  <Th>Timezone</Th>
+                  <Th>Status</Th>
+                  <Th className="text-right">Actions</Th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody className="divide-y divide-line bg-surface">
+                {locations.map((l) => (
+                  <tr key={l.id}>
+                    <Td>
+                      <span className="font-medium text-ink">{l.name}</span>
+                    </Td>
+                    <Td>
+                      {[l.city, l.region].filter(Boolean).join(", ") || (
+                        <span className="text-muted">—</span>
+                      )}
+                    </Td>
+                    <Td className="font-mono text-xs">{l.iana_timezone}</Td>
+                    <Td>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          l.status === "active"
+                            ? "bg-success-soft text-success"
+                            : "bg-warning/10 text-warning"
+                        }`}
+                      >
+                        {l.status}
+                      </span>
+                    </Td>
+                    <Td className="text-right">
+                      <Link
+                        href={`/tenant/locations/${l.id}/edit`}
+                        className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink transition hover:bg-bg"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
+                      </Link>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }

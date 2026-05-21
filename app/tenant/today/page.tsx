@@ -179,13 +179,13 @@ export default async function TodayPage({
                     {records.map((r) => (
                       <li
                         key={r.id}
-                        className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                        className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div>
                           <p className="text-sm font-medium text-ink">
                             {r.students.first_name} {r.students.last_name}
                           </p>
-                          <p className="mt-0.5 flex items-center gap-2 text-xs text-muted">
+                          <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted">
                             <span
                               className={`rounded-full px-2 py-0.5 font-medium ${
                                 STATUS_BADGE[r.status] ?? "bg-line text-muted"
@@ -201,12 +201,14 @@ export default async function TodayPage({
                             ) : null}
                           </p>
                         </div>
-                        <AttendanceRowActions
-                          attendanceId={r.id}
-                          status={r.status}
-                          checkedIn={!!r.check_in_at}
-                          checkedOut={!!r.check_out_at}
-                        />
+                        <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+                          <AttendanceRowActions
+                            attendanceId={r.id}
+                            status={r.status}
+                            checkedIn={!!r.check_in_at}
+                            checkedOut={!!r.check_out_at}
+                          />
+                        </div>
                       </li>
                     ))}
                   </ul>

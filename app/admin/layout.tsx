@@ -32,17 +32,19 @@ export default async function AdminLayout({
   return (
     <div className="min-h-screen bg-bg">
       <header className="border-b border-line bg-surface">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-6">
-            <Link href="/admin/tenants">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 md:px-6 md:py-4">
+          <div className="flex min-w-0 items-center gap-3 md:gap-6">
+            <Link href="/admin/tenants" className="shrink-0">
               <Logo />
             </Link>
-            <span className="rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-medium text-primary-strong">
+            <span className="hidden rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-medium text-primary-strong sm:inline">
               Super Admin
             </span>
           </div>
-          <div className="flex items-center gap-4 text-sm text-muted">
-            <span>{profile.full_name || profile.email}</span>
+          <div className="flex items-center gap-2 text-sm text-muted md:gap-4">
+            <span className="hidden truncate sm:inline">
+              {profile.full_name || profile.email}
+            </span>
             <form action={signOutAction}>
               <button
                 type="submit"
@@ -55,7 +57,7 @@ export default async function AdminLayout({
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">{children}</main>
     </div>
   );
 }

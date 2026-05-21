@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -25,6 +25,13 @@ export const metadata: Metadata = {
   title: "ClassCadence — The rhythm of every great learning center.",
   description:
     "Multi-tenant student management for supplemental learning centers. Replace paper schedules, sticky-note attendance, and missed-class chaos with a steady, parent-trusted rhythm.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#FBFAF7",
 };
 
 export default function RootLayout({
