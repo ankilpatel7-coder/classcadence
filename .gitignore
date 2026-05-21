@@ -34,3 +34,8 @@ next-env.d.ts
 # supabase
 supabase/.branches
 supabase/.temp
+
+# Reference docs (kept locally, not in repo)
+ClassCadence_BA_Document.docx
+ClassCadence_Launch_Plan.md
+ClassCadence_Quick_Start.md

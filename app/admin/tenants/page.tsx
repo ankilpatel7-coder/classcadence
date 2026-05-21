@@ -1,0 +1,125 @@
+import Link from "next/link";
+import { Plus } from "lucide-react";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
+
+type TenantRow = {
+  id: string;
+  name: string;
+  legal_name: string | null;
+  default_iana_tz: string;
+  country: string;
+  status: "active" | "suspended";
+  created_at: string;
+};
+
+export default async function TenantsPage() {
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("tenants")
+    .select("id, name, legal_name, default_iana_tz, country, status, created_at")
+    .order("created_at", { ascending: false });
+
+  const tenants = (data ?? []) as TenantRow[];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-ink">Tenants</h1>
+          <p className="mt-1 text-sm text-muted">
+            All learning centers on the ClassCadence platform.
+          </p>
+        </div>
+        <Link
+          href="/admin/tenants/new"
+          className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-card transition hover:bg-primary-strong"
+        >
+          <Plus className="h-4 w-4" />
+          Create tenant
+        </Link>
+      </div>
+
+      {error ? (
+        <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          Failed to load tenants: {error.message}
+        </div>
+      ) : null}
+
+      <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-card">
+        {tenants.length === 0 ? (
+          <div className="px-6 py-12 text-center">
+            <p className="text-sm text-muted">No tenants yet.</p>
+            <p className="mt-1 text-sm text-muted">
+              Create the first one to get started.
+            </p>
+          </div>
+        ) : (
+          <table className="min-w-full divide-y divide-line">
+            <thead className="bg-bg">
+              <tr>
+                <Th>Name</Th>
+                <Th>Legal name</Th>
+                <Th>Timezone</Th>
+                <Th>Country</Th>
+                <Th>Status</Th>
+                <Th>Created</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line bg-surface">
+              {tenants.map((t) => (
+                <tr key={t.id}>
+                  <Td>
+                    <span className="font-medium text-ink">{t.name}</span>
+                  </Td>
+                  <Td>{t.legal_name || <span className="text-muted">—</span>}</Td>
+                  <Td className="font-mono text-xs">{t.default_iana_tz}</Td>
+                  <Td>{t.country}</Td>
+                  <Td>
+                    <StatusBadge status={t.status} />
+                  </Td>
+                  <Td className="text-muted">
+                    {new Date(t.created_at).toLocaleDateString()}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Th({ children }: { children: React.ReactNode }) {
+  return (
+    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted">
+      {children}
+    </th>
+  );
+}
+
+function Td({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <td className={`px-4 py-3 text-sm text-ink ${className}`}>{children}</td>;
+}
+
+function StatusBadge({ status }: { status: "active" | "suspended" }) {
+  const styles =
+    status === "active"
+      ? "bg-success-soft text-success"
+      : "bg-line text-muted";
+  return (
+    <span
+      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${styles}`}
+    >
+      {status}
+    </span>
+  );
+}
