@@ -16,7 +16,6 @@ export function SetupForm({ email, initialFullName }: Props) {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [done, setDone] = useState(false);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -44,36 +43,10 @@ export function SetupForm({ email, initialFullName }: Props) {
       return;
     }
 
-    setDone(true);
+    // The user is already signed in (the invite callback set their session).
+    // Send them into the tenant area; the layout there reads role & tenant_id.
+    router.push("/tenant");
     router.refresh();
-  }
-
-  async function signOut() {
-    const supabase = createSupabaseBrowserClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  }
-
-  if (done) {
-    return (
-      <div className="space-y-4">
-        <div className="rounded-md bg-success-soft px-4 py-3 text-sm text-success">
-          Your password is set. You can sign in any time at the sign-in page.
-        </div>
-        <p className="text-sm text-muted">
-          We&apos;ll add your tenant dashboard in the next release. For now, you can sign
-          out and return when location setup is available.
-        </p>
-        <button
-          type="button"
-          onClick={signOut}
-          className="rounded-md border border-line bg-surface px-4 py-2 text-sm text-ink transition hover:bg-bg"
-        >
-          Sign out
-        </button>
-      </div>
-    );
   }
 
   return (

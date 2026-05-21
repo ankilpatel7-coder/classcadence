@@ -1,0 +1,160 @@
+import Link from "next/link";
+import { MapPin, Pencil, Plus } from "lucide-react";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
+
+export const dynamic = "force-dynamic";
+
+type LocationRow = {
+  id: string;
+  name: string;
+  city: string | null;
+  region: string | null;
+  iana_timezone: string;
+  status: "active" | "inactive";
+  created_at: string;
+};
+
+export default async function LocationsPage({
+  searchParams,
+}: {
+  searchParams: { deleted?: string; error?: string };
+}) {
+  const user = await getCurrentUserOrRedirect();
+  const supabase = createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from("locations")
+    .select("id, name, city, region, iana_timezone, status, created_at")
+    .order("created_at", { ascending: true });
+
+  const locations = (data ?? []) as LocationRow[];
+  const canEdit = user.role === "tenant_admin" || user.role === "super_admin";
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-ink">Locations</h1>
+          <p className="mt-1 text-sm text-muted">
+            One row per physical learning center under your tenant.
+          </p>
+        </div>
+        {canEdit ? (
+          <Link
+            href="/tenant/locations/new"
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-card transition hover:bg-primary-strong"
+          >
+            <Plus className="h-4 w-4" />
+            Add location
+          </Link>
+        ) : null}
+      </div>
+
+      {searchParams.deleted ? (
+        <div className="rounded-md border border-success/30 bg-success-soft px-4 py-3 text-sm text-success">
+          Location deleted.
+        </div>
+      ) : null}
+
+      {searchParams.error ? (
+        <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          {decodeURIComponent(searchParams.error)}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          Failed to load locations: {error.message}
+        </div>
+      ) : null}
+
+      <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-card">
+        {locations.length === 0 ? (
+          <div className="px-6 py-12 text-center">
+            <MapPin className="mx-auto h-6 w-6 text-muted" />
+            <p className="mt-3 text-sm text-muted">No locations yet.</p>
+            {canEdit ? (
+              <p className="mt-1 text-sm text-muted">
+                Add your first one to get started.
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <table className="min-w-full divide-y divide-line">
+            <thead className="bg-bg">
+              <tr>
+                <Th>Name</Th>
+                <Th>City / region</Th>
+                <Th>Timezone</Th>
+                <Th>Status</Th>
+                <Th className="text-right">Actions</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line bg-surface">
+              {locations.map((l) => (
+                <tr key={l.id}>
+                  <Td>
+                    <span className="font-medium text-ink">{l.name}</span>
+                  </Td>
+                  <Td>
+                    {[l.city, l.region].filter(Boolean).join(", ") || (
+                      <span className="text-muted">—</span>
+                    )}
+                  </Td>
+                  <Td className="font-mono text-xs">{l.iana_timezone}</Td>
+                  <Td>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        l.status === "active"
+                          ? "bg-success-soft text-success"
+                          : "bg-warning/10 text-warning"
+                      }`}
+                    >
+                      {l.status}
+                    </span>
+                  </Td>
+                  <Td className="text-right">
+                    <Link
+                      href={`/tenant/locations/${l.id}/edit`}
+                      className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink transition hover:bg-bg"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Edit
+                    </Link>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Th({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <th
+      className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted ${className}`}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Td({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <td className={`px-4 py-3 text-sm text-ink ${className}`}>{children}</td>;
+}

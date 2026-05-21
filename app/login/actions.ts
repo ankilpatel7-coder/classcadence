@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { postLoginPathForRole, type AppRole } from "@/lib/auth/post-login-redirect";
 
 const LoginSchema = z.object({
   email: z.string().email("Enter a valid email address."),
@@ -39,7 +40,7 @@ export async function signInAction(
     .eq("id", signIn.user.id)
     .single();
 
-  redirect(profile?.role === "super_admin" ? "/admin/tenants" : "/");
+  redirect(postLoginPathForRole(profile?.role as AppRole));
 }
 
 export async function signOutAction() {

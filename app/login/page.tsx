@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { postLoginPathForRole, type AppRole } from "@/lib/auth/post-login-redirect";
 import { LoginForm } from "./LoginForm";
 
 export const metadata = {
@@ -19,7 +20,8 @@ export default async function LoginPage() {
       .select("role")
       .eq("id", user.id)
       .single();
-    if (profile?.role === "super_admin") redirect("/admin/tenants");
+    const target = postLoginPathForRole(profile?.role as AppRole);
+    if (target !== "/") redirect(target);
   }
 
   return (
