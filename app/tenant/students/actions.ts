@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
+import { materializeSessions } from "@/app/tenant/today/actions";
 
 function emptyToNull<T extends z.ZodTypeAny>(schema: T) {
   return schema.transform((v) => (typeof v === "string" && v.length > 0 ? v : null));
@@ -263,6 +264,12 @@ export async function enrollStudentAction(
 
   const { error } = await supabase.from("enrollments").insert(parsed.data);
   if (error) return { error: error.message, success: false };
+
+  // Auto-materialize so the student instantly appears on Today + Schedule
+  // for the next 14 days of this recurring slot. Idempotent — safe to re-run.
+  await materializeSessions(14).catch(() => {
+    /* materialization is best-effort here; manual button in Settings covers gaps */
+  });
 
   return { error: null, success: true };
 }

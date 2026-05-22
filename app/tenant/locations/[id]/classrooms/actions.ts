@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
+import { materializeSessions } from "@/app/tenant/today/actions";
 
 const CORE = {
   name: z.string().trim().min(2, "Name must be at least 2 characters.").max(120),
@@ -313,6 +314,14 @@ export async function saveTimeSlotsAction(
     }));
     const { error } = await supabase.from("time_slots").insert(inserts);
     if (error) return { error: error.message, success: false };
+  }
+
+  // Auto-materialize so the new slots immediately show up on Today/Schedule
+  // (and so anyone already enrolled in them gets their attendance rows).
+  if (parsed.data.added_cells.length > 0) {
+    await materializeSessions(14).catch(() => {
+      /* best-effort; manual button in Settings covers gaps */
+    });
   }
 
   revalidatePath(
