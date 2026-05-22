@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { formatTimeInTimezone } from "@/lib/time";
-import { AvatarStack } from "@/app/_components/StudentAvatar";
 
 export type ScheduleSession = {
   id: string;
@@ -25,7 +24,7 @@ export type DayColumn = {
   isToday: boolean;
 };
 
-const ROW_PX = 28;
+const ROW_PX = 40;
 const HEADER_PX = 6;
 
 function minutesIntoDay(utc: string, tz: string): number {
@@ -132,45 +131,37 @@ export function WeekCalendar({
                 const eMin = minutesIntoDay(s.endUtc, s.tz);
                 const top = ((sMin - axisStartMin) / 30) * ROW_PX + HEADER_PX;
                 const height = Math.max(
-                  ((eMin - sMin) / 30) * ROW_PX - 2,
-                  ROW_PX * 0.9
+                  ((eMin - sMin) / 30) * ROW_PX - 4,
+                  ROW_PX * 1.2
                 );
                 const target = day.isToday ? "/tenant/today" : null;
                 const inner = (
                   <div
-                    className="overflow-hidden rounded-md border bg-surface shadow-card transition hover:shadow-lift"
+                    className="flex h-full items-center gap-2.5 overflow-hidden rounded-lg border bg-surface px-2.5 py-1.5 shadow-card transition hover:shadow-lift"
                     style={{
                       borderColor: s.classroomColor,
-                      borderLeftWidth: 4,
-                      height: "100%",
+                      borderLeftWidth: 5,
                       opacity: hoveredId && hoveredId !== s.id ? 0.7 : 1,
                     }}
                   >
-                    <div className="px-2 py-1.5">
-                      <p className="truncate text-[11px] font-semibold tabular-nums text-ink">
+                    <CountBadge
+                      count={s.studentNames.length}
+                      color={s.classroomColor}
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold tabular-nums text-ink">
                         {formatTimeInTimezone(s.startUtc, s.tz)}
                       </p>
-                      <p className="truncate text-[10px] text-muted">
+                      <p className="truncate text-[11px] text-muted">
                         {s.classroomName}
                       </p>
-                      {s.studentNames.length > 0 ? (
-                        <div className="mt-1">
-                          <AvatarStack
-                            names={s.studentNames}
-                            size={18}
-                            max={3}
-                          />
-                        </div>
-                      ) : (
-                        <p className="mt-1 text-[10px] text-muted">No students</p>
-                      )}
                     </div>
                   </div>
                 );
                 return (
                   <div
                     key={s.id}
-                    className="absolute inset-x-1"
+                    className="absolute inset-x-1.5"
                     style={{ top, height }}
                     onMouseEnter={() => setHoveredId(s.id)}
                     onMouseLeave={() => setHoveredId(null)}
@@ -191,4 +182,20 @@ function fmt(t: number) {
   const h = Math.floor(t / 60);
   const m = t % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function CountBadge({ count, color }: { count: number; color: string }) {
+  return (
+    <span
+      className="inline-flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full text-base font-bold text-white shadow-emboss ring-2 ring-surface tabular-nums"
+      style={{
+        backgroundImage: `radial-gradient(circle at 30% 25%, rgba(255,255,255,0.32), transparent 55%), linear-gradient(135deg, ${color}, ${color})`,
+        backgroundColor: color,
+      }}
+      title={`${count} student${count === 1 ? "" : "s"}`}
+      aria-label={`${count} students enrolled`}
+    >
+      {count}
+    </span>
+  );
 }
