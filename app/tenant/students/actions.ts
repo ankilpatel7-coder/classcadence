@@ -193,7 +193,6 @@ function formDataToObject(fd: FormData): Record<string, unknown> {
 const EnrollSchema = z.object({
   student_id: z.string().uuid(),
   time_slot_id: z.string().uuid(),
-  effective_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid start date."),
 });
 
 export type EnrollState = { error: string | null; success: boolean };
@@ -208,69 +207,99 @@ export async function enrollStudentAction(
   const parsed = EnrollSchema.safeParse({
     student_id: formData.get("student_id"),
     time_slot_id: formData.get("time_slot_id"),
-    effective_from: formData.get("effective_from"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input.", success: false };
   }
 
   const supabase = createSupabaseServerClient();
+  const today = new Date().toISOString().slice(0, 10);
 
-  // Per-location quota enforcement (BA: configurable max classes/student/week).
+  // Look up slot + classroom + location info in one shot.
   const { data: slot } = await supabase
     .from("time_slots")
     .select(
-      "id, classrooms!inner(locations!inner(id, max_classes_per_student_per_week))"
+      "id, capacity_override, classrooms!inner(id, default_capacity, locations!inner(id, max_classes_per_student_per_week))"
     )
     .eq("id", parsed.data.time_slot_id)
     .maybeSingle();
   type SlotRow = {
-    classrooms: { locations: { id: string; max_classes_per_student_per_week: number } };
+    id: string;
+    capacity_override: number | null;
+    classrooms: {
+      id: string;
+      default_capacity: number;
+      locations: { id: string; max_classes_per_student_per_week: number };
+    };
   };
   const slotRow = slot as unknown as SlotRow | null;
-  if (slotRow) {
-    const locId = slotRow.classrooms.locations.id;
-    const cap = slotRow.classrooms.locations.max_classes_per_student_per_week;
-    const today = new Date().toISOString().slice(0, 10);
+  if (!slotRow) return { error: "Slot not found.", success: false };
 
-    const { data: existing } = await supabase
-      .from("enrollments")
-      .select(
-        "id, effective_to, time_slots!inner(classrooms!inner(locations!inner(id)))"
-      )
-      .eq("student_id", parsed.data.student_id)
-      .or(`effective_to.is.null,effective_to.gte.${today}`);
+  const locId = slotRow.classrooms.locations.id;
+  const cap = slotRow.classrooms.locations.max_classes_per_student_per_week;
+  const slotCapacity =
+    slotRow.capacity_override ?? slotRow.classrooms.default_capacity;
 
-    type Existing = {
-      id: string;
-      effective_to: string | null;
-      time_slots: { classrooms: { locations: { id: string } } };
+  // 1. Per-slot capacity enforcement.
+  const { data: slotEnrollments } = await supabase
+    .from("enrollments")
+    .select("id, student_id")
+    .eq("time_slot_id", parsed.data.time_slot_id)
+    .or(`effective_to.is.null,effective_to.gte.${today}`);
+
+  const currentSlotCount = slotEnrollments?.length ?? 0;
+  const alreadyEnrolled = (slotEnrollments ?? []).some(
+    (e) => e.student_id === parsed.data.student_id
+  );
+  if (alreadyEnrolled) {
+    return {
+      error: "This student is already enrolled in this time slot.",
+      success: false,
     };
-    const existingAtLocation = (
-      (existing ?? []) as unknown as Existing[]
-    ).filter((e) => e.time_slots.classrooms.locations.id === locId);
-
-    if (existingAtLocation.length >= cap) {
-      return {
-        error:
-          `This student is already enrolled in ${existingAtLocation.length} active ` +
-          `class${existingAtLocation.length === 1 ? "" : "es"} at this location. ` +
-          `The location's cap is ${cap}/week. Raise the cap on the Location page or ` +
-          `end an existing enrollment first.`,
-        success: false,
-      };
-    }
+  }
+  if (currentSlotCount >= slotCapacity) {
+    return {
+      error: `This time slot is full (${currentSlotCount}/${slotCapacity}). Pick another slot.`,
+      success: false,
+    };
   }
 
-  const { error } = await supabase.from("enrollments").insert(parsed.data);
+  // 2. Per-location student quota enforcement.
+  const { data: existing } = await supabase
+    .from("enrollments")
+    .select(
+      "id, effective_to, time_slots!inner(classrooms!inner(locations!inner(id)))"
+    )
+    .eq("student_id", parsed.data.student_id)
+    .or(`effective_to.is.null,effective_to.gte.${today}`);
+
+  type Existing = {
+    id: string;
+    effective_to: string | null;
+    time_slots: { classrooms: { locations: { id: string } } };
+  };
+  const existingAtLocation = (
+    (existing ?? []) as unknown as Existing[]
+  ).filter((e) => e.time_slots.classrooms.locations.id === locId);
+
+  if (existingAtLocation.length >= cap) {
+    return {
+      error:
+        `This student already has ${existingAtLocation.length} active ` +
+        `class${existingAtLocation.length === 1 ? "" : "es"} at this location ` +
+        `(cap: ${cap}/week). End an existing enrollment first.`,
+      success: false,
+    };
+  }
+
+  const { error } = await supabase.from("enrollments").insert({
+    student_id: parsed.data.student_id,
+    time_slot_id: parsed.data.time_slot_id,
+    effective_from: today,
+  });
   if (error) return { error: error.message, success: false };
 
-  // Auto-materialize so the student instantly appears on Today + Schedule
-  // for the next 14 days of this recurring slot. Idempotent — safe to re-run.
-  await materializeSessions(14).catch(() => {
-    /* materialization is best-effort here; manual button in Settings covers gaps */
-  });
-
+  await materializeSessions(14).catch(() => {});
   return { error: null, success: true };
 }
 
