@@ -289,11 +289,12 @@ function Section({
                     {r.studentName}
                   </p>
                   <p className="text-xs text-muted">
-                    {new Date(r.sessionStartUtc).toLocaleDateString("en-US", {
+                    {new Intl.DateTimeFormat("en-US", {
+                      timeZone: r.tz,
                       weekday: "short",
                       month: "short",
                       day: "numeric",
-                    })}
+                    }).format(new Date(r.sessionStartUtc))}
                     {" · "}
                     {formatTimeInTimezone(r.sessionStartUtc, r.tz)}–
                     {formatTimeInTimezone(r.sessionEndUtc, r.tz)}
