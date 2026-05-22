@@ -10,29 +10,32 @@ const META: Record<Action, { label: string; icon: typeof Check; classes: string 
   check_in: {
     label: "Check in",
     icon: Check,
-    classes: "bg-success text-white hover:bg-success/90",
+    classes:
+      "bg-success text-white shadow-emboss hover:brightness-110 hover:shadow-lift hover:-translate-y-px",
   },
   check_out: {
     label: "Check out",
     icon: LogOut,
-    classes: "bg-primary text-white hover:bg-primary-strong",
+    classes:
+      "bg-primary text-white shadow-emboss hover:brightness-110 hover:shadow-lift hover:-translate-y-px",
   },
   mark_absent: {
     label: "Absent",
     icon: CircleSlash,
     classes:
-      "border border-danger/30 bg-surface text-danger hover:bg-danger/5",
+      "border border-danger/30 bg-surface text-danger shadow-card hover:bg-danger/5 hover:shadow-lift hover:-translate-y-px",
   },
   mark_excused: {
     label: "Excuse",
     icon: FilePen,
     classes:
-      "border border-line bg-surface text-muted hover:bg-bg",
+      "border border-line bg-surface text-muted shadow-card hover:bg-bg hover:shadow-lift hover:-translate-y-px",
   },
   reset: {
     label: "Undo",
     icon: RotateCcw,
-    classes: "border border-line bg-surface text-muted hover:bg-bg",
+    classes:
+      "border border-line bg-surface text-muted shadow-card hover:bg-bg hover:shadow-lift hover:-translate-y-px",
   },
 };
 

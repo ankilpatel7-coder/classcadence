@@ -11,6 +11,7 @@ import { checkInAllExpectedAction } from "./actions";
 import { loadSessionsInWindow } from "./load-sessions";
 import { StudentAvatar } from "@/app/_components/StudentAvatar";
 import { StatusBadge } from "@/app/_components/StatusIcon";
+import { LiveTimer } from "@/app/_components/LiveTimer";
 import { LessonNoteWidget } from "./LessonNoteWidget";
 
 export const metadata = { title: "Today — ClassCadence" };
@@ -273,6 +274,11 @@ export default async function TodayPage({
                         {formatTimeInTimezone(r.startUtc, r.tz)}–
                         {formatTimeInTimezone(r.endUtc, r.tz)} · {r.classroomName}
                       </p>
+                      {r.checkInAt ? (
+                        <div className="mt-1">
+                          <LiveTimer since={r.checkInAt} until={r.checkOutAt} />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                   <StatusBadge status={r.status} />
@@ -376,22 +382,25 @@ function Row({
                 {r.firstName} {r.lastName}
               </p>
               {r.checkInAt ? (
-                <p className="text-[10px] text-muted">
-                  In {new Date(r.checkInAt).toLocaleTimeString("en-US", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
+                  <span>
+                    In{" "}
+                    {new Date(r.checkInAt).toLocaleTimeString("en-US", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                  <LiveTimer since={r.checkInAt} until={r.checkOutAt} />
                   {r.checkOutAt ? (
-                    <>
-                      {" "}
-                      · Out{" "}
+                    <span>
+                      Out{" "}
                       {new Date(r.checkOutAt).toLocaleTimeString("en-US", {
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
-                    </>
+                    </span>
                   ) : null}
-                </p>
+                </div>
               ) : null}
             </div>
           </div>

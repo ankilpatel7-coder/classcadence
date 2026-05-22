@@ -140,6 +140,7 @@ export default async function TenantLayout({
             fullName={user.fullName || ""}
             email={user.email}
             subtitle={tenant?.name ?? undefined}
+            align="top"
           />
         </div>
       </aside>

@@ -15,10 +15,13 @@ export function UserMenu({
   fullName,
   email,
   subtitle,
+  align = "bottom",
 }: {
   fullName: string;
   email: string;
   subtitle?: string;
+  /** Where the dropdown opens relative to the avatar. "top" for sidebar bottoms. */
+  align?: "top" | "bottom";
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -59,7 +62,13 @@ export function UserMenu({
       </button>
 
       {open ? (
-        <div className="absolute right-0 z-50 mt-2 w-64 origin-top-right rounded-lg border border-line bg-surface shadow-pop">
+        <div
+          className={`absolute z-50 w-64 rounded-lg border border-line bg-surface shadow-pop ${
+            align === "top"
+              ? "bottom-full left-0 mb-2 origin-bottom-left"
+              : "right-0 mt-2 origin-top-right"
+          }`}
+        >
           <div className="border-b border-line p-3">
             <p className="truncate text-sm font-medium text-ink">
               {fullName || email}
