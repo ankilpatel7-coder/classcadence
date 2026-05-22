@@ -146,20 +146,43 @@ export async function createMakeupAttendancesAction(formData: FormData) {
   if (!absent) redirect("/tenant/makeups?error=not-found");
 
   const studentId = absent.student_id as string;
-  const rows = parsed.data.session_ids.map((sessionId) => ({
-    session_id: sessionId,
-    student_id: studentId,
-    status: "expected",
-    is_makeup: true,
-  }));
+  type AttendanceInsert = {
+    session_id: string;
+    student_id: string;
+    status: string;
+    is_makeup?: boolean;
+  };
+  const rows: AttendanceInsert[] = parsed.data.session_ids.map(
+    (sessionId) => ({
+      session_id: sessionId,
+      student_id: studentId,
+      status: "expected",
+      is_makeup: true,
+    })
+  );
 
-  // Insert (skip duplicates if student happens to already be in a slot's session).
-  const { error: insertError } = await supabase
+  // Try with is_makeup first; if the migration hasn't been applied, retry
+  // without it so the make-up still works (just no Make-up chip on Today).
+  let { error: insertError } = await supabase
     .from("attendance_records")
     .upsert(rows, {
       onConflict: "session_id,student_id",
       ignoreDuplicates: true,
     });
+  if (insertError && /is_makeup/.test(insertError.message)) {
+    const fallback: AttendanceInsert[] = rows.map((r) => ({
+      session_id: r.session_id,
+      student_id: r.student_id,
+      status: r.status,
+    }));
+    const retry = await supabase
+      .from("attendance_records")
+      .upsert(fallback, {
+        onConflict: "session_id,student_id",
+        ignoreDuplicates: true,
+      });
+    insertError = retry.error;
+  }
   if (insertError) {
     redirect(
       `/tenant/makeups/${absent.id}/offer?error=${encodeURIComponent(insertError.message)}`
