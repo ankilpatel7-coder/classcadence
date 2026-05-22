@@ -1,4 +1,4 @@
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, CheckCheck, StickyNote } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import {
@@ -6,28 +6,44 @@ import {
   localToUtc,
   todayInTimezone,
 } from "@/lib/time";
-import { CheckCheck } from "lucide-react";
 import { AttendanceRowActions } from "./AttendanceRowActions";
-import { TodayCalendar, type CalendarSession } from "./TodayCalendar";
 import { checkInAllExpectedAction } from "./actions";
-import { loadSessionsInWindow, type LoadedSession } from "./load-sessions";
+import { loadSessionsInWindow } from "./load-sessions";
+import { StudentAvatar } from "@/app/_components/StudentAvatar";
 import { StatusBadge } from "@/app/_components/StatusIcon";
+import { LessonNoteWidget } from "./LessonNoteWidget";
 
 export const metadata = { title: "Today — ClassCadence" };
 export const dynamic = "force-dynamic";
 
-type SessionRow = LoadedSession;
+type AttendanceRow = {
+  id: string;
+  status: string;
+  check_in_at: string | null;
+  check_out_at: string | null;
+  students: { id: string; first_name: string; last_name: string };
+  lesson_notes: { body: string; visibility: string; created_at: string }[] | null;
+};
 
-function minutesIntoDay(utc: string, tz: string): number {
-  const t = formatTimeInTimezone(utc, tz);
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
+type SessionRow = {
+  id: string;
+  scheduled_start_utc: string;
+  scheduled_end_utc: string;
+  status: string;
+  time_slots: {
+    classrooms: {
+      name: string;
+      color: string;
+      locations: { id: string; name: string; iana_timezone: string };
+    };
+  };
+  attendance_records: AttendanceRow[];
+};
 
 export default async function TodayPage({
   searchParams,
 }: {
-  searchParams: { error?: string; makeup_url?: string };
+  searchParams: { error?: string };
 }) {
   const user = await getCurrentUserOrRedirect();
   const supabase = createSupabaseServerClient();
@@ -47,7 +63,8 @@ export default async function TodayPage({
 
   const sessions: SessionRow[] = await loadSessionsInWindow(startUtc, endUtc);
 
-  // If nothing renders, ask Postgres directly so we can show diagnostics.
+  // Diagnostic: if rendering empty, check the bare count to distinguish
+  // "no data" from "data dropped by join".
   let diagnosticBareCount: number | null = null;
   if (sessions.length === 0) {
     const { count } = await supabase
@@ -68,20 +85,7 @@ export default async function TodayPage({
     );
   }
 
-  // Compute calendar axis (pad ±30 min around earliest start / latest end).
-  const allTimes = sessions.flatMap((s) => [
-    minutesIntoDay(s.scheduled_start_utc, primaryTz),
-    minutesIntoDay(s.scheduled_end_utc, primaryTz),
-  ]);
-  const axisStartMin =
-    allTimes.length > 0
-      ? Math.max(0, Math.floor(Math.min(...allTimes) / 30) * 30 - 30)
-      : 9 * 60;
-  const axisEndMin =
-    allTimes.length > 0
-      ? Math.min(24 * 60, Math.ceil(Math.max(...allTimes) / 30) * 30 + 30)
-      : 18 * 60;
-
+  // Build day stats.
   const totals = sessions.reduce(
     (acc, s) => {
       for (const r of s.attendance_records ?? []) {
@@ -96,35 +100,65 @@ export default async function TodayPage({
     { total: 0, checkedIn: 0, absent: 0, excused: 0, expected: 0 }
   );
 
-  const calendarSessions: CalendarSession[] = sessions.map((s) => ({
-    id: s.id,
-    startUtc: s.scheduled_start_utc,
-    endUtc: s.scheduled_end_utc,
-    tz: s.time_slots.classrooms.locations.iana_timezone ?? primaryTz,
-    classroomName: s.time_slots.classrooms.name,
-    classroomColor: s.time_slots.classrooms.color,
-    locationName: s.time_slots.classrooms.locations.name,
-    records: (s.attendance_records ?? [])
-      .sort((a, b) =>
-        `${a.students.last_name} ${a.students.first_name}`.localeCompare(
-          `${b.students.last_name} ${b.students.first_name}`
-        )
-      )
-      .map((r) => ({
-        id: r.id,
+  // Flatten into row data (one row per session × student), sorted by time.
+  type FlatRow = {
+    attendanceId: string;
+    sessionId: string;
+    startUtc: string;
+    endUtc: string;
+    tz: string;
+    classroomName: string;
+    classroomColor: string;
+    locationName: string;
+    studentId: string;
+    firstName: string;
+    lastName: string;
+    status: string;
+    checkInAt: string | null;
+    checkOutAt: string | null;
+    notes: { body: string; visibility: string; created_at: string }[];
+  };
+
+  const rows: FlatRow[] = sessions
+    .flatMap((s) =>
+      (s.attendance_records ?? []).map<FlatRow>((r) => ({
+        attendanceId: r.id,
+        sessionId: s.id,
+        startUtc: s.scheduled_start_utc,
+        endUtc: s.scheduled_end_utc,
+        tz: s.time_slots.classrooms.locations.iana_timezone ?? primaryTz,
+        classroomName: s.time_slots.classrooms.name,
+        classroomColor: s.time_slots.classrooms.color,
+        locationName: s.time_slots.classrooms.locations.name,
+        studentId: r.students.id,
+        firstName: r.students.first_name,
+        lastName: r.students.last_name,
         status: r.status,
-        check_in_at: r.check_in_at,
-        check_out_at: r.check_out_at,
-        student: r.students,
-        notes: (r.lesson_notes ?? []).map((n) => ({
-          body: n.body,
-          visibility: (n.visibility === "parent" ? "parent" : "internal") as
-            | "parent"
-            | "internal",
-          createdAt: n.created_at,
-        })),
-      })),
-  }));
+        checkInAt: r.check_in_at,
+        checkOutAt: r.check_out_at,
+        notes: r.lesson_notes ?? [],
+      }))
+    )
+    .sort((a, b) => {
+      if (a.startUtc !== b.startUtc) return a.startUtc.localeCompare(b.startUtc);
+      return `${a.lastName} ${a.firstName}`.localeCompare(
+        `${b.lastName} ${b.firstName}`
+      );
+    });
+
+  // Group rows by session for the "check in all" header bar.
+  const sessionMeta = new Map<
+    string,
+    { expected: number; classroomName: string }
+  >();
+  for (const r of rows) {
+    const m = sessionMeta.get(r.sessionId) ?? {
+      expected: 0,
+      classroomName: r.classroomName,
+    };
+    if (r.status === "expected") m.expected++;
+    sessionMeta.set(r.sessionId, m);
+  }
 
   return (
     <div className="space-y-6">
@@ -144,45 +178,20 @@ export default async function TodayPage({
 
       {sessions.length > 0 ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <DayStat
-            label="Expected"
-            value={totals.total}
-            tone="muted"
-          />
+          <DayStat label="Expected" value={totals.total} tone="muted" />
           <DayStat
             label="Checked in"
             value={totals.checkedIn}
             tone="success"
           />
-          <DayStat
-            label="Absent"
-            value={totals.absent}
-            tone="danger"
-          />
-          <DayStat
-            label="Excused"
-            value={totals.excused}
-            tone="warning"
-          />
+          <DayStat label="Absent" value={totals.absent} tone="danger" />
+          <DayStat label="Excused" value={totals.excused} tone="warning" />
         </div>
       ) : null}
 
       {searchParams.error ? (
         <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
           {decodeURIComponent(searchParams.error)}
-        </div>
-      ) : null}
-
-      {searchParams.makeup_url ? (
-        <div className="rounded-md border border-primary/30 bg-primary-soft/40 px-4 py-3 text-sm text-ink">
-          <p className="font-medium text-primary-strong">Make-up offer created.</p>
-          <p className="mt-1 text-xs text-muted">
-            Share this link with the parent. They can accept or decline without
-            signing in. The link expires in 7 days.
-          </p>
-          <p className="mt-2 break-all rounded-md border border-line bg-surface px-2 py-1 font-mono text-xs">
-            {decodeURIComponent(searchParams.makeup_url)}
-          </p>
         </div>
       ) : null}
 
@@ -205,134 +214,228 @@ export default async function TodayPage({
                 <div>Tenant: {user.tenantId ?? "(none)"}</div>
                 <div>Window: {startUtc} → {endUtc}</div>
                 <div>Sessions found (bare query): {diagnosticBareCount}</div>
-                {diagnosticBareCount > 0 ? (
-                  <div className="mt-2 text-danger">
-                    Bare count shows {diagnosticBareCount} sessions, but the
-                    embed query returns 0 — most likely a tenant-id mismatch
-                    on a joined table (students, locations). Run the
-                    consistency SQL.
-                  </div>
-                ) : (
-                  <div className="mt-2">
-                    No sessions exist in this UTC window. Open
-                    /tenant/settings → Force refresh schedule to materialize.
-                  </div>
-                )}
               </dl>
             </details>
           ) : null}
         </div>
       ) : (
-        <>
-          {/* Calendar view — md and up */}
-          <div className="hidden md:block">
-            <TodayCalendar
-              sessions={calendarSessions}
-              axisStartMin={axisStartMin}
-              axisEndMin={axisEndMin}
-            />
-          </div>
+        <div className="panel overflow-hidden">
+          {/* Desktop table */}
+          <table className="hidden min-w-full divide-y divide-line md:table">
+            <thead className="bg-bg/60">
+              <tr>
+                <Th>Time</Th>
+                <Th>Class</Th>
+                <Th>Student</Th>
+                <Th>Status</Th>
+                <Th className="text-right">Actions</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line bg-surface">
+              {rows.map((r, idx) => {
+                const prev = idx > 0 ? rows[idx - 1] : null;
+                const isNewSession = !prev || prev.sessionId !== r.sessionId;
+                return (
+                  <Row
+                    key={r.attendanceId}
+                    r={r}
+                    isFirstOfSession={isNewSession}
+                    sessionExpected={
+                      sessionMeta.get(r.sessionId)?.expected ?? 0
+                    }
+                  />
+                );
+              })}
+            </tbody>
+          </table>
 
-          {/* List view — mobile */}
-          <div className="space-y-4 md:hidden">
-            {sessions.map((session) => {
-              const tz =
-                session.time_slots.classrooms.locations.iana_timezone ?? primaryTz;
-              const startLabel = formatTimeInTimezone(
-                session.scheduled_start_utc,
-                tz
-              );
-              const endLabel = formatTimeInTimezone(session.scheduled_end_utc, tz);
-              const classroom = session.time_slots.classrooms;
-              const records = (session.attendance_records ?? []).sort((a, b) =>
-                `${a.students.last_name} ${a.students.first_name}`.localeCompare(
-                  `${b.students.last_name} ${b.students.first_name}`
-                )
-              );
-
-              const expectedCount = records.filter(
-                (r) => r.status === "expected"
-              ).length;
-
-              return (
-                <section
-                  key={session.id}
-                  className="rounded-lg border border-line bg-surface shadow-card"
-                  style={{ borderLeftColor: classroom.color, borderLeftWidth: 4 }}
-                >
-                  <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
+          {/* Mobile card list */}
+          <ul className="divide-y divide-line md:hidden">
+            {rows.map((r) => (
+              <li
+                key={r.attendanceId}
+                className="space-y-2 p-3"
+                style={{
+                  borderLeft: `4px solid ${r.classroomColor}`,
+                }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <StudentAvatar
+                      name={`${r.firstName} ${r.lastName}`}
+                      size={26}
+                    />
                     <div>
-                      <p className="text-sm font-medium text-ink tabular-nums">
-                        {startLabel}–{endLabel}
+                      <p className="text-sm font-medium text-ink">
+                        {r.firstName} {r.lastName}
                       </p>
-                      <p className="text-xs text-muted">
-                        {classroom.name} · {classroom.locations.name}
+                      <p className="text-[10px] text-muted">
+                        {formatTimeInTimezone(r.startUtc, r.tz)}–
+                        {formatTimeInTimezone(r.endUtc, r.tz)} · {r.classroomName}
                       </p>
                     </div>
-                    <p className="text-xs text-muted">{records.length} expected</p>
-                  </header>
-                  {expectedCount > 0 ? (
-                    <div className="flex items-center justify-between gap-2 border-b border-line bg-bg/40 px-4 py-2">
-                      <span className="text-[11px] text-muted">
-                        {expectedCount} still to check in
-                      </span>
-                      <form action={checkInAllExpectedAction}>
-                        <input type="hidden" name="session_id" value={session.id} />
-                        <button
-                          type="submit"
-                          className="inline-flex items-center gap-1 rounded-md bg-success px-2.5 py-1 text-xs font-medium text-white shadow-emboss"
-                        >
-                          <CheckCheck className="h-3.5 w-3.5" />
-                          Check in all
-                        </button>
-                      </form>
-                    </div>
-                  ) : null}
-
-                  {records.length === 0 ? (
-                    <p className="px-4 py-6 text-center text-sm text-muted">
-                      No students enrolled in this slot yet.
-                    </p>
-                  ) : (
-                    <ul className="divide-y divide-line">
-                      {records.map((r) => (
-                        <li
-                          key={r.id}
-                          className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                          <div>
-                            <p className="text-sm font-medium text-ink">
-                              {r.students.first_name} {r.students.last_name}
-                            </p>
-                            <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted">
-                              <StatusBadge status={r.status} />
-                              {r.check_in_at ? (
-                                <span>In {formatTimeInTimezone(r.check_in_at, tz)}</span>
-                              ) : null}
-                              {r.check_out_at ? (
-                                <span>Out {formatTimeInTimezone(r.check_out_at, tz)}</span>
-                              ) : null}
-                            </p>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
-                            <AttendanceRowActions
-                              attendanceId={r.id}
-                              status={r.status}
-                              checkedIn={!!r.check_in_at}
-                              checkedOut={!!r.check_out_at}
-                            />
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              );
-            })}
-          </div>
-        </>
+                  </div>
+                  <StatusBadge status={r.status} />
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <AttendanceRowActions
+                    attendanceId={r.attendanceId}
+                    status={r.status}
+                    checkedIn={!!r.checkInAt}
+                    checkedOut={!!r.checkOutAt}
+                  />
+                </div>
+                <LessonNoteWidget
+                  attendanceId={r.attendanceId}
+                  existingNotes={r.notes.map((n) => ({
+                    body: n.body,
+                    visibility:
+                      n.visibility === "parent" ? "parent" : "internal",
+                    createdAt: n.created_at,
+                  }))}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
+  );
+}
+
+function Row({
+  r,
+  isFirstOfSession,
+  sessionExpected,
+}: {
+  r: {
+    attendanceId: string;
+    sessionId: string;
+    startUtc: string;
+    endUtc: string;
+    tz: string;
+    classroomName: string;
+    classroomColor: string;
+    locationName: string;
+    firstName: string;
+    lastName: string;
+    status: string;
+    checkInAt: string | null;
+    checkOutAt: string | null;
+    notes: { body: string; visibility: string; created_at: string }[];
+  };
+  isFirstOfSession: boolean;
+  sessionExpected: number;
+}) {
+  return (
+    <>
+      {isFirstOfSession ? (
+        <tr className="bg-bg/30">
+          <td colSpan={5} className="px-4 py-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: r.classroomColor }}
+                />
+                <p className="text-xs font-semibold uppercase tracking-wider text-ink">
+                  {formatTimeInTimezone(r.startUtc, r.tz)}–
+                  {formatTimeInTimezone(r.endUtc, r.tz)} · {r.classroomName}
+                </p>
+              </div>
+              {sessionExpected > 0 ? (
+                <form action={checkInAllExpectedAction}>
+                  <input type="hidden" name="session_id" value={r.sessionId} />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1 rounded-md bg-success px-2.5 py-1 text-[11px] font-medium text-white shadow-emboss hover:brightness-110"
+                  >
+                    <CheckCheck className="h-3.5 w-3.5" />
+                    Check in all expected ({sessionExpected})
+                  </button>
+                </form>
+              ) : null}
+            </div>
+          </td>
+        </tr>
+      ) : null}
+
+      <tr className="hover:bg-bg/40">
+        <td className="px-4 py-2 text-xs text-muted tabular-nums">
+          {formatTimeInTimezone(r.startUtc, r.tz)}
+        </td>
+        <td className="px-4 py-2 text-xs text-muted">{r.classroomName}</td>
+        <td className="px-4 py-2">
+          <div className="flex items-center gap-2">
+            <StudentAvatar
+              name={`${r.firstName} ${r.lastName}`}
+              size={26}
+            />
+            <div>
+              <p className="text-sm font-medium text-ink">
+                {r.firstName} {r.lastName}
+              </p>
+              {r.checkInAt ? (
+                <p className="text-[10px] text-muted">
+                  In {new Date(r.checkInAt).toLocaleTimeString("en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                  {r.checkOutAt ? (
+                    <>
+                      {" "}
+                      · Out{" "}
+                      {new Date(r.checkOutAt).toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </>
+                  ) : null}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </td>
+        <td className="px-4 py-2">
+          <StatusBadge status={r.status} />
+        </td>
+        <td className="px-4 py-2 text-right">
+          <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+            <AttendanceRowActions
+              attendanceId={r.attendanceId}
+              status={r.status}
+              checkedIn={!!r.checkInAt}
+              checkedOut={!!r.checkOutAt}
+            />
+            {r.notes.length > 0 ? (
+              <span
+                className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2 py-1 text-[10px] text-muted"
+                title={r.notes.map((n) => n.body).join("\n")}
+              >
+                <StickyNote className="h-3 w-3" />
+                {r.notes.length}
+              </span>
+            ) : null}
+          </div>
+        </td>
+      </tr>
+    </>
+  );
+}
+
+function Th({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <th
+      className={`px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-muted ${className}`}
+    >
+      {children}
+    </th>
   );
 }
 

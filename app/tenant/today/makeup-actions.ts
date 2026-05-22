@@ -99,11 +99,12 @@ export async function offerMakeupAction(formData: FormData) {
   }
 
   revalidatePath("/tenant/today");
+  revalidatePath("/tenant/makeups");
   // Surface the raw token URL once via query string so the front desk can copy
   // it and share with the parent. (Tokens are never stored unhashed.)
   const url = `${process.env.NEXT_PUBLIC_APP_URL || ""}/makeup/${raw}`;
   redirect(
-    `/tenant/today?makeup_url=${encodeURIComponent(url)}`
+    `/tenant/makeups?makeup_url=${encodeURIComponent(url)}`
   );
 }
 
