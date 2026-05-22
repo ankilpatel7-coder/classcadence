@@ -11,20 +11,12 @@ import { AttendanceRowActions } from "./AttendanceRowActions";
 import { TodayCalendar, type CalendarSession } from "./TodayCalendar";
 import { checkInAllExpectedAction } from "./actions";
 import { loadSessionsInWindow, type LoadedSession } from "./load-sessions";
+import { StatusBadge } from "@/app/_components/StatusIcon";
 
 export const metadata = { title: "Today — ClassCadence" };
 export const dynamic = "force-dynamic";
 
 type SessionRow = LoadedSession;
-
-const STATUS_BADGE: Record<string, string> = {
-  expected: "bg-line text-muted",
-  present: "bg-success-soft text-success",
-  late: "bg-warning/10 text-warning",
-  absent: "bg-danger/10 text-danger",
-  excused: "bg-bg text-muted",
-  made_up: "bg-primary-soft text-primary-strong",
-};
 
 function minutesIntoDay(utc: string, tz: string): number {
   const t = formatTimeInTimezone(utc, tz);
@@ -90,6 +82,20 @@ export default async function TodayPage({
       ? Math.min(24 * 60, Math.ceil(Math.max(...allTimes) / 30) * 30 + 30)
       : 18 * 60;
 
+  const totals = sessions.reduce(
+    (acc, s) => {
+      for (const r of s.attendance_records ?? []) {
+        acc.total++;
+        if (r.status === "present" || r.status === "late") acc.checkedIn++;
+        else if (r.status === "absent") acc.absent++;
+        else if (r.status === "excused") acc.excused++;
+        else acc.expected++;
+      }
+      return acc;
+    },
+    { total: 0, checkedIn: 0, absent: 0, excused: 0, expected: 0 }
+  );
+
   const calendarSessions: CalendarSession[] = sessions.map((s) => ({
     id: s.id,
     startUtc: s.scheduled_start_utc,
@@ -135,6 +141,31 @@ export default async function TodayPage({
           {primaryLocation ? ` · ${primaryLocation.name}` : ""}
         </p>
       </div>
+
+      {sessions.length > 0 ? (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <DayStat
+            label="Expected"
+            value={totals.total}
+            tone="muted"
+          />
+          <DayStat
+            label="Checked in"
+            value={totals.checkedIn}
+            tone="success"
+          />
+          <DayStat
+            label="Absent"
+            value={totals.absent}
+            tone="danger"
+          />
+          <DayStat
+            label="Excused"
+            value={totals.excused}
+            tone="warning"
+          />
+        </div>
+      ) : null}
 
       {searchParams.error ? (
         <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
@@ -274,13 +305,7 @@ export default async function TodayPage({
                               {r.students.first_name} {r.students.last_name}
                             </p>
                             <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted">
-                              <span
-                                className={`rounded-full px-2 py-0.5 font-medium ${
-                                  STATUS_BADGE[r.status] ?? "bg-line text-muted"
-                                }`}
-                              >
-                                {r.status}
-                              </span>
+                              <StatusBadge status={r.status} />
                               {r.check_in_at ? (
                                 <span>In {formatTimeInTimezone(r.check_in_at, tz)}</span>
                               ) : null}
@@ -307,6 +332,35 @@ export default async function TodayPage({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function DayStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "muted" | "success" | "danger" | "warning";
+}) {
+  const toneClasses = {
+    muted: "from-bg to-surface text-ink",
+    success: "from-success-soft to-surface text-success",
+    danger: "from-danger/10 to-surface text-danger",
+    warning: "from-warning/10 to-surface text-warning",
+  } as const;
+  return (
+    <div
+      className={`rounded-lg border border-line bg-gradient-to-br p-4 shadow-card ${toneClasses[tone]}`}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-[0.15em] opacity-70">
+        {label}
+      </p>
+      <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums">
+        {value}
+      </p>
     </div>
   );
 }

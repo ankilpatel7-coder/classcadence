@@ -10,6 +10,7 @@ import { LessonNoteWidget, type ExistingNote } from "./LessonNoteWidget";
 import { OfferMakeupButton } from "./OfferMakeupButton";
 import { StudentAvatar } from "@/app/_components/StudentAvatar";
 import { CountBadge } from "@/app/_components/CountBadge";
+import { StatusBadge } from "@/app/_components/StatusIcon";
 
 export type AttendanceRow = {
   id: string;
@@ -29,15 +30,6 @@ export type CalendarSession = {
   classroomColor: string;
   locationName: string;
   records: AttendanceRow[];
-};
-
-const STATUS_BADGE: Record<string, string> = {
-  expected: "bg-line text-muted",
-  present: "bg-success-soft text-success",
-  late: "bg-warning/10 text-warning",
-  absent: "bg-danger/10 text-danger",
-  excused: "bg-bg text-muted",
-  made_up: "bg-primary-soft text-primary-strong",
 };
 
 const ROW_PX = 40; // height per 30-min row in the calendar grid
@@ -174,13 +166,7 @@ export function TodayCalendar({
                                   {r.student.first_name} {r.student.last_name}
                                 </p>
                                 <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-muted">
-                                  <span
-                                    className={`rounded-full px-2 py-0.5 font-medium ${
-                                      STATUS_BADGE[r.status] ?? "bg-line text-muted"
-                                    }`}
-                                  >
-                                    {r.status}
-                                  </span>
+                                  <StatusBadge status={r.status} />
                                   {r.check_in_at ? (
                                     <span>
                                       In {formatTimeInTimezone(r.check_in_at, s.tz)}
