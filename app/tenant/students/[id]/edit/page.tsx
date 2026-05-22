@@ -6,7 +6,8 @@ import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { EditStudentForm } from "./EditStudentForm";
 import {
   EnrollmentsSection,
-  type SlotCard,
+  type CurrentEnrollment,
+  type WizardClassroom,
   type Weekday as EWeekday,
 } from "./EnrollmentsSection";
 
@@ -56,72 +57,111 @@ export default async function EditStudentPage({
   const { data: locations } = await supabase
     .from("locations").select("id, name").order("name");
 
-  // Fetch slots + classroom + location info + capacity.
-  const { data: slotsData } = await supabase
-    .from("time_slots")
+  const today = new Date().toISOString().slice(0, 10);
+
+  // 1) Every active enrollment for this student — shown at the top of the
+  //    section so the front desk can see exactly what they're enrolled in
+  //    (even if the slot's classroom/location has been deactivated since).
+  const { data: myEnrollmentsRaw } = await supabase
+    .from("enrollments")
     .select(
-      "id, weekday, start_time, end_time, capacity_override, status, classrooms!inner(id, name, color, default_capacity, status, locations!inner(id, name, status))"
+      "id, time_slots!inner(weekday, start_time, end_time, classrooms!inner(name, color, locations!inner(name)))"
+    )
+    .eq("student_id", s.id)
+    .or(`effective_to.is.null,effective_to.gt.${today}`);
+
+  type MyEnrRaw = {
+    id: string;
+    time_slots: {
+      weekday: string;
+      start_time: string;
+      end_time: string;
+      classrooms: { name: string; color: string; locations: { name: string } };
+    };
+  };
+  const currentEnrollments: CurrentEnrollment[] = (
+    (myEnrollmentsRaw ?? []) as unknown as MyEnrRaw[]
+  ).map((e) => ({
+    enrollment_id: e.id,
+    weekday: e.time_slots.weekday as EWeekday,
+    start_time: String(e.time_slots.start_time).slice(0, 5),
+    end_time: String(e.time_slots.end_time).slice(0, 5),
+    classroom_name: e.time_slots.classrooms.name,
+    classroom_color: e.time_slots.classrooms.color,
+    location_name: e.time_slots.classrooms.locations.name,
+  }));
+
+  // 2) Active classrooms with their active slots + capacity counts. This
+  //    drives the classroom -> day -> time wizard.
+  const { data: classroomsRaw } = await supabase
+    .from("classrooms")
+    .select(
+      "id, name, color, default_capacity, status, locations!inner(id, name, status), time_slots(id, weekday, start_time, end_time, capacity_override, status)"
     )
     .eq("status", "active");
 
-  type SlotRowRaw = {
+  type ClassroomRaw = {
     id: string;
-    weekday: string;
-    start_time: string;
-    end_time: string;
-    capacity_override: number | null;
-    classrooms: {
+    name: string;
+    color: string;
+    default_capacity: number;
+    locations: { id: string; name: string; status: string };
+    time_slots: {
       id: string;
-      name: string;
-      color: string;
-      default_capacity: number;
+      weekday: string;
+      start_time: string;
+      end_time: string;
+      capacity_override: number | null;
       status: string;
-      locations: { id: string; name: string; status: string };
-    };
+    }[];
   };
+  const activeClassrooms = ((classroomsRaw ?? []) as unknown as ClassroomRaw[])
+    .filter((c) => c.locations?.status === "active");
 
-  const activeSlots = ((slotsData ?? []) as unknown as SlotRowRaw[]).filter(
-    (slot) =>
-      slot.classrooms?.status === "active" &&
-      slot.classrooms?.locations?.status === "active"
+  // Collect slot ids to count enrollments per slot.
+  const allSlotIds = activeClassrooms.flatMap((c) =>
+    (c.time_slots ?? []).filter((t) => t.status === "active").map((t) => t.id)
   );
-
-  // For the slot ids we have, fetch all active enrollments to count + detect this student's.
-  const slotIds = activeSlots.map((s) => s.id);
-  const today = new Date().toISOString().slice(0, 10);
-
-  let enrollmentsBySlot = new Map<
-    string,
-    { id: string; student_id: string }[]
-  >();
-  if (slotIds.length > 0) {
-    const { data: en } = await supabase
+  const slotCounts = new Map<string, number>();
+  if (allSlotIds.length > 0) {
+    const { data: counts } = await supabase
       .from("enrollments")
-      .select("id, time_slot_id, student_id")
-      .in("time_slot_id", slotIds)
+      .select("time_slot_id")
+      .in("time_slot_id", allSlotIds)
       .or(`effective_to.is.null,effective_to.gt.${today}`);
-    for (const e of en ?? []) {
-      const arr = enrollmentsBySlot.get(e.time_slot_id as string) ?? [];
-      arr.push({ id: e.id as string, student_id: e.student_id as string });
-      enrollmentsBySlot.set(e.time_slot_id as string, arr);
+    for (const c of counts ?? []) {
+      const id = c.time_slot_id as string;
+      slotCounts.set(id, (slotCounts.get(id) ?? 0) + 1);
     }
   }
 
-  const slotCards: SlotCard[] = activeSlots.map((slot) => {
-    const entries = enrollmentsBySlot.get(slot.id) ?? [];
-    const mine = entries.find((e) => e.student_id === s.id);
+  // Days the student is ALREADY booked on — used to grey out those day pills
+  // in the wizard (and the server still enforces the rule).
+  const occupiedWeekdays = new Set<string>(
+    currentEnrollments.map((e) => e.weekday)
+  );
+
+  const wizardClassrooms: WizardClassroom[] = activeClassrooms.map((c) => {
+    const activeSlots = (c.time_slots ?? []).filter((t) => t.status === "active");
+    const slots = activeSlots.map((t) => {
+      const capacity = t.capacity_override ?? c.default_capacity;
+      const enrolled = slotCounts.get(t.id) ?? 0;
+      return {
+        id: t.id,
+        weekday: t.weekday as EWeekday,
+        start_time: String(t.start_time).slice(0, 5),
+        end_time: String(t.end_time).slice(0, 5),
+        capacity,
+        enrolled_count: enrolled,
+      };
+    });
     return {
-      id: slot.id,
-      weekday: slot.weekday as EWeekday,
-      start_time: String(slot.start_time).slice(0, 5),
-      end_time: String(slot.end_time).slice(0, 5),
-      classroom_name: slot.classrooms.name,
-      classroom_color: slot.classrooms.color,
-      location_name: slot.classrooms.locations.name,
-      capacity:
-        slot.capacity_override ?? slot.classrooms.default_capacity,
-      enrolled_count: entries.length,
-      current_student_enrollment_id: mine?.id ?? null,
+      id: c.id,
+      name: c.name,
+      color: c.color,
+      default_capacity: c.default_capacity,
+      location_name: c.locations.name,
+      slots,
     };
   });
 
@@ -180,11 +220,16 @@ export default async function EditStudentPage({
       <section className="panel p-6">
         <h2 className="section-eyebrow">Classes</h2>
         <p className="mt-1 text-xs text-muted">
-          Tap a time slot to enroll this student. Their weekly class repeats every
-          week from today until you tap it again to remove. Full slots are locked.
+          One class per day. Tap an existing class to remove it. To add a new one,
+          choose a classroom, then a day, then an available time.
         </p>
         <div className="mt-4">
-          <EnrollmentsSection studentId={s.id} slots={slotCards} />
+          <EnrollmentsSection
+            studentId={s.id}
+            currentEnrollments={currentEnrollments}
+            classrooms={wizardClassrooms}
+            occupiedWeekdays={Array.from(occupiedWeekdays)}
+          />
         </div>
       </section>
     </div>
