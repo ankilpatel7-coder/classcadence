@@ -65,7 +65,7 @@ export default async function EditStudentPage({
   const { data: myEnrollmentsRaw } = await supabase
     .from("enrollments")
     .select(
-      "id, time_slots!inner(weekday, start_time, end_time, classrooms!inner(name, color, locations!inner(name)))"
+      "id, time_slots!inner(weekday, start_time, end_time, classrooms!inner(id, name, color, locations!inner(name)))"
     )
     .eq("student_id", s.id)
     .or(`effective_to.is.null,effective_to.gt.${today}`);
@@ -76,7 +76,12 @@ export default async function EditStudentPage({
       weekday: string;
       start_time: string;
       end_time: string;
-      classrooms: { name: string; color: string; locations: { name: string } };
+      classrooms: {
+        id: string;
+        name: string;
+        color: string;
+        locations: { name: string };
+      };
     };
   };
   const currentEnrollments: CurrentEnrollment[] = (
@@ -86,10 +91,16 @@ export default async function EditStudentPage({
     weekday: e.time_slots.weekday as EWeekday,
     start_time: String(e.time_slots.start_time).slice(0, 5),
     end_time: String(e.time_slots.end_time).slice(0, 5),
+    classroom_id: e.time_slots.classrooms.id,
     classroom_name: e.time_slots.classrooms.name,
     classroom_color: e.time_slots.classrooms.color,
     location_name: e.time_slots.classrooms.locations.name,
   }));
+
+  // The first (any) enrollment's classroom locks the wizard. If the student
+  // is in no classes, the picker shows every active classroom.
+  const lockedClassroomId =
+    currentEnrollments.length > 0 ? currentEnrollments[0].classroom_id : null;
 
   // 2) Active classrooms with their active slots + capacity counts. This
   //    drives the classroom -> day -> time wizard.
@@ -229,6 +240,7 @@ export default async function EditStudentPage({
             currentEnrollments={currentEnrollments}
             classrooms={wizardClassrooms}
             occupiedWeekdays={Array.from(occupiedWeekdays)}
+            lockedClassroomId={lockedClassroomId}
           />
         </div>
       </section>

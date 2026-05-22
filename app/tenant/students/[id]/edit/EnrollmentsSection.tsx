@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
-import { ChevronRight, Trash2, X } from "lucide-react";
+import { ChevronRight, Lock, Trash2 } from "lucide-react";
 import {
   enrollStudentAction,
   endEnrollmentAction,
@@ -16,6 +16,7 @@ export type CurrentEnrollment = {
   weekday: Weekday;
   start_time: string;
   end_time: string;
+  classroom_id: string;
   classroom_name: string;
   classroom_color: string;
   location_name: string;
@@ -85,47 +86,62 @@ export function EnrollmentsSection({
   currentEnrollments,
   classrooms,
   occupiedWeekdays,
+  lockedClassroomId,
 }: {
   studentId: string;
   currentEnrollments: CurrentEnrollment[];
   classrooms: WizardClassroom[];
   occupiedWeekdays: string[];
+  lockedClassroomId: string | null;
 }) {
   const [state, formAction] = useFormState(enrollStudentAction, initialState);
-  const [classroomId, setClassroomId] = useState<string | null>(null);
-  const [day, setDay] = useState<Weekday | null>(null);
+  const [pickedClassroomId, setPickedClassroomId] = useState<string | null>(null);
 
-  // Reset wizard after a successful enroll. Re-fetched data flows in via props.
+  // The classroom the wizard is currently anchored to.
+  const effectiveClassroomId = lockedClassroomId ?? pickedClassroomId;
+
+  // Reset picker after an enroll succeeds (locked case becomes effective).
   useEffect(() => {
-    if (state.success) {
-      setClassroomId(null);
-      setDay(null);
-    }
+    if (state.success) setPickedClassroomId(null);
   }, [state.success]);
 
-  const occupied = useMemo(
-    () => new Set(occupiedWeekdays),
-    [occupiedWeekdays]
+  const occupied = useMemo(() => new Set(occupiedWeekdays), [occupiedWeekdays]);
+
+  const cls = useMemo(
+    () =>
+      classrooms.find((c) => c.id === effectiveClassroomId) ?? null,
+    [classrooms, effectiveClassroomId]
   );
 
-  const cls = classrooms.find((c) => c.id === classroomId) ?? null;
+  // Group available slots by weekday — full slots and occupied days are
+  // filtered out so only addable times are visible.
+  type SlotRow = WizardClassroom["slots"][number];
+  const slotsByDay = useMemo(() => {
+    const map = new Map<Weekday, SlotRow[]>();
+    if (!cls) return map;
+    for (const slot of cls.slots) {
+      if (slot.enrolled_count >= slot.capacity) continue;
+      if (occupied.has(slot.weekday)) continue;
+      if (!map.has(slot.weekday)) map.set(slot.weekday, []);
+      map.get(slot.weekday)!.push(slot);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => a.start_time.localeCompare(b.start_time));
+    }
+    return map;
+  }, [cls, occupied]);
 
-  const availableDays = useMemo(() => {
-    if (!cls) return [];
-    const set = new Set(cls.slots.map((s) => s.weekday));
-    return WEEKDAYS.filter((d) => set.has(d.key));
-  }, [cls]);
-
-  const slotsForDay = useMemo(() => {
-    if (!cls || !day) return [];
-    return cls.slots
-      .filter((s) => s.weekday === day && s.enrolled_count < s.capacity)
-      .sort((a, b) => a.start_time.localeCompare(b.start_time));
-  }, [cls, day]);
+  const hasAvailableTimes = Array.from(slotsByDay.values()).some(
+    (list) => list.length > 0
+  );
 
   function weekdayFull(w: string) {
     return WEEKDAYS.find((d) => d.key === w)?.full ?? w;
   }
+
+  const lockedClassroomObj = lockedClassroomId
+    ? classrooms.find((c) => c.id === lockedClassroomId) ?? null
+    : null;
 
   return (
     <div className="space-y-6">
@@ -170,28 +186,42 @@ export function EnrollmentsSection({
         )}
       </div>
 
-      {/* Add a class — three-step wizard */}
+      {/* Add a class — either classroom step OR slot picker */}
       <div className="space-y-4 rounded-md border border-line bg-bg/30 p-4">
         <h3 className="section-eyebrow">Add a class</h3>
 
-        {/* Step 1: Classroom */}
-        <Step n={1} label="Classroom">
-          {classrooms.length === 0 ? (
-            <p className="text-xs text-muted">
-              No active classrooms in your tenant yet.
-            </p>
-          ) : (
+        {lockedClassroomObj ? (
+          <div className="flex items-center gap-3 rounded-md border border-line bg-surface px-3 py-2">
+            <Lock className="h-3.5 w-3.5 text-muted" />
+            <span className="flex items-center gap-2 text-xs">
+              <span
+                aria-hidden
+                className="inline-block h-2 w-2 rounded-full"
+                style={{ backgroundColor: lockedClassroomObj.color }}
+              />
+              <span className="font-medium text-ink">
+                {lockedClassroomObj.name}
+              </span>
+              <span className="text-muted">· {lockedClassroomObj.location_name}</span>
+            </span>
+            <span className="ml-auto text-[10px] text-muted">
+              Locked to this classroom
+            </span>
+          </div>
+        ) : classrooms.length === 0 ? (
+          <p className="text-xs text-muted">
+            No active classrooms in your tenant yet.
+          </p>
+        ) : (
+          <Step n={1} label="Classroom">
             <div className="flex flex-wrap gap-2">
               {classrooms.map((c) => {
-                const active = classroomId === c.id;
+                const active = pickedClassroomId === c.id;
                 return (
                   <button
                     key={c.id}
                     type="button"
-                    onClick={() => {
-                      setClassroomId(c.id);
-                      setDay(null);
-                    }}
+                    onClick={() => setPickedClassroomId(c.id)}
                     className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition ${
                       active
                         ? "border-primary bg-primary text-white shadow-emboss"
@@ -213,71 +243,42 @@ export function EnrollmentsSection({
                 );
               })}
             </div>
-          )}
-        </Step>
-
-        {/* Step 2: Day */}
-        {classroomId ? (
-          <Step n={2} label="Day">
-            {availableDays.length === 0 ? (
-              <p className="text-xs text-muted">
-                No time slots on this classroom yet.
-              </p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {availableDays.map((d) => {
-                  const active = day === d.key;
-                  const blocked = occupied.has(d.key);
-                  return (
-                    <button
-                      key={d.key}
-                      type="button"
-                      disabled={blocked}
-                      title={
-                        blocked
-                          ? "Student already has a class on this day"
-                          : undefined
-                      }
-                      onClick={() => setDay(d.key)}
-                      className={`inline-flex items-center gap-1 rounded-md border px-3 py-2 text-sm transition ${
-                        active
-                          ? "border-primary bg-primary text-white shadow-emboss"
-                          : blocked
-                            ? "border-line bg-line/30 text-muted cursor-not-allowed"
-                            : "border-line bg-surface text-ink hover:border-primary/40 hover:bg-primary-soft/30"
-                      }`}
-                    >
-                      {d.short}
-                      {blocked ? (
-                        <X className="h-3 w-3" aria-label="day already has a class" />
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </Step>
-        ) : null}
+        )}
 
-        {/* Step 3: Available time slots */}
-        {classroomId && day ? (
-          <Step n={3} label="Available time">
-            {slotsForDay.length === 0 ? (
+        {effectiveClassroomId ? (
+          <Step n={lockedClassroomObj ? 1 : 2} label="Available time">
+            {!hasAvailableTimes ? (
               <p className="text-xs text-muted">
-                No available times on this day. (All slots are full or there are
-                no slots scheduled.)
+                No available times. (Days the student is already booked are
+                hidden, and full slots aren&apos;t shown.)
               </p>
             ) : (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                {slotsForDay.map((slot) => (
-                  <form key={slot.id} action={formAction}>
-                    <input type="hidden" name="student_id" value={studentId} />
-                    <input type="hidden" name="time_slot_id" value={slot.id} />
-                    <EnrollSubmit
-                      label={`${slot.start_time} (${slot.enrolled_count}/${slot.capacity})`}
-                    />
-                  </form>
-                ))}
+              <div className="space-y-3">
+                {WEEKDAYS.filter((d) => (slotsByDay.get(d.key)?.length ?? 0) > 0).map(
+                  (d) => (
+                    <div key={d.key}>
+                      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted">
+                        {d.full}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                        {(slotsByDay.get(d.key) ?? []).map((slot: SlotRow) => (
+                          <form key={slot.id} action={formAction}>
+                            <input type="hidden" name="student_id" value={studentId} />
+                            <input
+                              type="hidden"
+                              name="time_slot_id"
+                              value={slot.id}
+                            />
+                            <EnrollSubmit
+                              label={`${slot.start_time} (${slot.enrolled_count}/${slot.capacity})`}
+                            />
+                          </form>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                )}
               </div>
             )}
           </Step>

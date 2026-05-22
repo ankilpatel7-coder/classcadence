@@ -219,7 +219,7 @@ export async function enrollStudentAction(
   const { data: slot } = await supabase
     .from("time_slots")
     .select(
-      "id, weekday, capacity_override, classrooms!inner(id, default_capacity, locations!inner(id, max_classes_per_student_per_week))"
+      "id, weekday, capacity_override, classrooms!inner(id, name, default_capacity, locations!inner(id, max_classes_per_student_per_week))"
     )
     .eq("id", parsed.data.time_slot_id)
     .maybeSingle();
@@ -229,6 +229,7 @@ export async function enrollStudentAction(
     capacity_override: number | null;
     classrooms: {
       id: string;
+      name: string;
       default_capacity: number;
       locations: { id: string; max_classes_per_student_per_week: number };
     };
@@ -237,6 +238,7 @@ export async function enrollStudentAction(
   if (!slotRow) return { error: "Slot not found.", success: false };
 
   const targetWeekday = slotRow.weekday;
+  const targetClassroomId = slotRow.classrooms.id;
   const locId = slotRow.classrooms.locations.id;
   const cap = slotRow.classrooms.locations.max_classes_per_student_per_week;
   const slotCapacity =
@@ -269,11 +271,12 @@ export async function enrollStudentAction(
     };
   }
 
-  // 2. All active enrollments for this student — used for same-day + location quota.
+  // 2. All active enrollments for this student — used for same-day,
+  //    same-classroom, and location quota checks.
   const { data: existing } = await supabase
     .from("enrollments")
     .select(
-      "id, effective_to, time_slots!inner(weekday, classrooms!inner(locations!inner(id)))"
+      "id, effective_to, time_slots!inner(weekday, classrooms!inner(id, name, locations!inner(id)))"
     )
     .eq("student_id", parsed.data.student_id)
     .or(activeFilter);
@@ -281,11 +284,28 @@ export async function enrollStudentAction(
   type Existing = {
     id: string;
     effective_to: string | null;
-    time_slots: { weekday: string; classrooms: { locations: { id: string } } };
+    time_slots: {
+      weekday: string;
+      classrooms: { id: string; name: string; locations: { id: string } };
+    };
   };
   const existingTyped = (existing ?? []) as unknown as Existing[];
 
-  // 2a. One class per weekday rule.
+  // 2a. One classroom per student.
+  const otherClassroom = existingTyped.find(
+    (e) => e.time_slots.classrooms.id !== targetClassroomId
+  );
+  if (otherClassroom) {
+    return {
+      error:
+        `This student is already in ${otherClassroom.time_slots.classrooms.name}. ` +
+        `Each student belongs to one classroom — remove their existing classes ` +
+        `before switching.`,
+      success: false,
+    };
+  }
+
+  // 2b. One class per weekday rule.
   const sameDay = existingTyped.find(
     (e) => e.time_slots.weekday === targetWeekday
   );
@@ -299,7 +319,7 @@ export async function enrollStudentAction(
     };
   }
 
-  // 2b. Per-location class quota.
+  // 2c. Per-location class quota.
   const existingAtLocation = existingTyped.filter(
     (e) => e.time_slots.classrooms.locations.id === locId
   );
@@ -321,6 +341,12 @@ export async function enrollStudentAction(
   if (error) return { error: error.message, success: false };
 
   await materializeSessions(14).catch(() => {});
+
+  // Immediate UI update: re-render the edit page so Current Classes picks
+  // up the new enrollment without waiting for the next navigation.
+  revalidatePath(`/tenant/students/${parsed.data.student_id}/edit`);
+  revalidatePath("/tenant/today");
+  revalidatePath("/tenant/schedule");
   return { error: null, success: true };
 }
 
