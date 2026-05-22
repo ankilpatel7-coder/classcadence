@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import {
   DatabaseLink,
+  RefreshScheduleButton,
   SeedDemoButton,
   WipeAllButton,
   WipeDemoButton,
@@ -111,6 +112,20 @@ export default async function SettingsPage({
           slots are preserved.
         </Flash>
       ) : null}
+
+      {searchParams.materialized_sessions !== undefined ? (
+        <Flash kind="success">
+          Schedule refresh ran. Sessions inserted:{" "}
+          <span className="font-mono">
+            {searchParams.materialized_sessions}
+          </span>{" "}
+          · Attendance rows inserted:{" "}
+          <span className="font-mono">
+            {searchParams.materialized_attendance}
+          </span>
+          .
+        </Flash>
+      ) : null}
       {searchParams.error ? (
         <Flash kind="danger">{decodeURIComponent(searchParams.error)}</Flash>
       ) : null}
@@ -131,6 +146,16 @@ export default async function SettingsPage({
         <p className="mt-3 text-xs text-muted">
           Total rows tracked here: <span className="font-mono">{totalRows}</span>.
         </p>
+      </Card>
+
+      <Card title="Troubleshooting">
+        <p className="mb-3 text-sm text-muted">
+          If Today or Schedule looks empty after enrolling students, click the
+          button below to force a refresh. You&apos;ll see a banner with the
+          number of sessions and attendance rows created, or an error if
+          something&apos;s misconfigured.
+        </p>
+        <RefreshScheduleButton />
       </Card>
 
       <Card title="Branding">

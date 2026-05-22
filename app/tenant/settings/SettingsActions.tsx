@@ -3,6 +3,7 @@
 import { useFormStatus } from "react-dom";
 import {
   Database,
+  RefreshCcw,
   Sparkles,
   Trash2,
   AlertTriangle,
@@ -12,6 +13,7 @@ import {
   wipeAllTenantDataAction,
   wipeDemoDataAction,
 } from "./actions";
+import { materializeSessionsAction } from "@/app/tenant/today/actions";
 
 function PendingButton({
   label,
@@ -39,6 +41,19 @@ function PendingButton({
       <Icon className="h-4 w-4" />
       {pending ? pendingLabel : label}
     </button>
+  );
+}
+
+export function RefreshScheduleButton() {
+  return (
+    <form action={materializeSessionsAction}>
+      <PendingButton
+        label="Force refresh schedule"
+        pendingLabel="Refreshing…"
+        icon={RefreshCcw}
+        className="border border-line bg-surface text-ink hover:bg-bg"
+      />
+    </form>
   );
 }
 
