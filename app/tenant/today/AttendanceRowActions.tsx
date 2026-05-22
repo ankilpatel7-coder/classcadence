@@ -56,11 +56,12 @@ const META: Record<Action, Meta> = {
 
 function PendingButton({ action }: { action: Action }) {
   const { pending } = useFormStatus();
-  const { label, icon: Icon, classes } = META[action];
+  const { label, icon: Icon, classes, style } = META[action];
   return (
     <button
       type="submit"
       disabled={pending}
+      style={style}
       className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition disabled:opacity-60 ${classes}`}
     >
       <Icon className="h-4 w-4" />
