@@ -107,7 +107,7 @@ export default async function EditStudentPage({
   const { data: classroomsRaw } = await supabase
     .from("classrooms")
     .select(
-      "id, name, color, default_capacity, status, locations!inner(id, name, status), time_slots(id, weekday, start_time, end_time, capacity_override, status)"
+      "id, name, color, default_capacity, status, locations!inner(id, name, status, max_classes_per_student_per_week), time_slots(id, weekday, start_time, end_time, capacity_override, status)"
     )
     .eq("status", "active");
 
@@ -116,7 +116,12 @@ export default async function EditStudentPage({
     name: string;
     color: string;
     default_capacity: number;
-    locations: { id: string; name: string; status: string };
+    locations: {
+      id: string;
+      name: string;
+      status: string;
+      max_classes_per_student_per_week: number;
+    };
     time_slots: {
       id: string;
       weekday: string;
@@ -172,6 +177,7 @@ export default async function EditStudentPage({
       color: c.color,
       default_capacity: c.default_capacity,
       location_name: c.locations.name,
+      max_classes_per_week: c.locations.max_classes_per_student_per_week,
       slots,
     };
   });

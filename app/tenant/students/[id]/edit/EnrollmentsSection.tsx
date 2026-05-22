@@ -28,6 +28,7 @@ export type WizardClassroom = {
   color: string;
   default_capacity: number;
   location_name: string;
+  max_classes_per_week: number;
   slots: {
     id: string;
     weekday: Weekday;
@@ -73,7 +74,7 @@ function EnrollSubmit({ label }: { label: string }) {
     <button
       type="submit"
       disabled={pending}
-      className="btn-primary w-full justify-between !py-2 text-xs"
+      className="btn-primary w-full justify-center !py-2 text-xs"
     >
       <span className="font-mono tabular-nums">{label}</span>
       <ChevronRight className="h-3.5 w-3.5" />
@@ -113,6 +114,12 @@ export function EnrollmentsSection({
     [classrooms, effectiveClassroomId]
   );
 
+  // Cap is per-location and rides with the chosen/locked classroom.
+  const weeklyCap = cls?.max_classes_per_week ?? 0;
+  const enrolledCount = currentEnrollments.length;
+  const remainingClasses = Math.max(weeklyCap - enrolledCount, 0);
+  const atCap = weeklyCap > 0 && enrolledCount >= weeklyCap;
+
   // Group available slots by weekday — full slots and occupied days are
   // filtered out so only addable times are visible.
   type SlotRow = WizardClassroom["slots"][number];
@@ -147,7 +154,20 @@ export function EnrollmentsSection({
     <div className="space-y-6">
       {/* Current classes */}
       <div className="space-y-2">
-        <h3 className="section-eyebrow">Current classes</h3>
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="section-eyebrow">Current classes</h3>
+          {weeklyCap > 0 ? (
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
+                atCap
+                  ? "bg-warning/10 text-warning"
+                  : "bg-primary-soft text-primary-strong"
+              }`}
+            >
+              {enrolledCount} / {weeklyCap} used
+            </span>
+          ) : null}
+        </div>
         {currentEnrollments.length === 0 ? (
           <p className="rounded-md border border-dashed border-line bg-bg/40 px-4 py-4 text-center text-xs text-muted">
             Not enrolled in any classes yet.
@@ -186,9 +206,27 @@ export function EnrollmentsSection({
         )}
       </div>
 
-      {/* Add a class — either classroom step OR slot picker */}
+      {/* Add a class — only render if the student has headroom */}
+      {atCap ? (
+        <div className="rounded-md border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-ink">
+          <p className="font-medium">
+            All {weeklyCap} weekly classes used.
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Remove an existing class above to enroll this student in a different
+            slot.
+          </p>
+        </div>
+      ) : (
       <div className="space-y-4 rounded-md border border-line bg-bg/30 p-4">
-        <h3 className="section-eyebrow">Add a class</h3>
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="section-eyebrow">Add a class</h3>
+          {weeklyCap > 0 ? (
+            <span className="text-[10px] text-muted">
+              {remainingClasses} of {weeklyCap} remaining
+            </span>
+          ) : null}
+        </div>
 
         {lockedClassroomObj ? (
           <div className="flex items-center gap-3 rounded-md border border-line bg-surface px-3 py-2">
@@ -290,6 +328,7 @@ export function EnrollmentsSection({
           </p>
         ) : null}
       </div>
+      )}
     </div>
   );
 }
