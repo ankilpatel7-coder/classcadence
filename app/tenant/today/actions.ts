@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceClient,
+} from "@/lib/supabase/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import {
   datesForWeekdayInRange,
@@ -58,7 +61,11 @@ export async function materializeSessionsAction(_formData: FormData) {
 }
 
 export async function materializeSessions(days: number) {
-  const supabase = createSupabaseServerClient();
+  // Materialization is a system operation: it creates `sessions` and
+  // `attendance_records` rows derived from enrollments. The sessions table
+  // intentionally has no user-write RLS policy, so this runs with the
+  // service-role client (same as the Inngest cron path).
+  const supabase = createSupabaseServiceClient();
   const now = new Date();
   const until = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
 
