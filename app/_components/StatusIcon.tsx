@@ -75,7 +75,7 @@ export function StatusIcon({
 
 export function StatusBadge({
   status,
-  size = 18,
+  size = 22,
 }: {
   status: string;
   size?: number;
@@ -84,7 +84,7 @@ export function StatusBadge({
   return (
     <span className="inline-flex items-center gap-1.5">
       <StatusIcon status={status} size={size} />
-      <span className={`text-[11px] font-medium ${meta.textClass}`}>
+      <span className={`text-sm font-medium ${meta.textClass}`}>
         {meta.label}
       </span>
     </span>

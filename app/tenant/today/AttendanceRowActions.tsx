@@ -46,9 +46,9 @@ function PendingButton({ action }: { action: Action }) {
     <button
       type="submit"
       disabled={pending}
-      className={`inline-flex min-h-[36px] items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium transition disabled:opacity-60 ${classes}`}
+      className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition disabled:opacity-60 ${classes}`}
     >
-      <Icon className="h-3.5 w-3.5" />
+      <Icon className="h-4 w-4" />
       {pending ? "…" : label}
     </button>
   );

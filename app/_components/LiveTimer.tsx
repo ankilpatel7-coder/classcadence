@@ -35,15 +35,13 @@ export function LiveTimer({
 
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[11px] tabular-nums shadow-emboss ${
-        until
-          ? "bg-bg/60 text-muted"
-          : "bg-success-soft text-success"
+      className={`inline-flex items-center gap-2 rounded-full px-3 py-1 font-mono text-base font-bold tabular-nums shadow-emboss ring-2 ring-surface ${
+        until ? "bg-bg text-muted" : "bg-success-soft text-success"
       }`}
       title={until ? "Session length" : "Time since check-in"}
     >
       <span
-        className={`inline-block h-1.5 w-1.5 rounded-full ${
+        className={`inline-block h-2 w-2 rounded-full ${
           until ? "bg-muted" : "bg-success animate-pulse"
         }`}
       />

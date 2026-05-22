@@ -351,14 +351,14 @@ function Row({
     <>
       {isFirstOfSession ? (
         <tr className="bg-bg/30">
-          <td colSpan={5} className="px-4 py-2">
+          <td colSpan={5} className="px-4 py-3">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <span
-                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  className="inline-block h-3 w-3 rounded-full"
                   style={{ backgroundColor: r.classroomColor }}
                 />
-                <p className="text-xs font-semibold uppercase tracking-wider text-ink">
+                <p className="text-sm font-semibold uppercase tracking-wider text-ink">
                   {formatTimeInTimezone(r.startUtc, r.tz)}–
                   {formatTimeInTimezone(r.endUtc, r.tz)} · {r.classroomName}
                 </p>
@@ -368,9 +368,9 @@ function Row({
                   <input type="hidden" name="session_id" value={r.sessionId} />
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-1 rounded-md bg-success px-2.5 py-1 text-[11px] font-medium text-white shadow-emboss hover:brightness-110"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-xs font-semibold text-white shadow-emboss hover:brightness-110"
                   >
-                    <CheckCheck className="h-3.5 w-3.5" />
+                    <CheckCheck className="h-4 w-4" />
                     Check in all expected ({sessionExpected})
                   </button>
                 </form>
@@ -381,34 +381,34 @@ function Row({
       ) : null}
 
       <tr className="hover:bg-bg/40">
-        <td className="px-4 py-2 text-xs text-muted tabular-nums">
+        <td className="px-4 py-3 text-sm font-medium text-ink tabular-nums">
           {formatTimeInTimezone(r.startUtc, r.tz)}
         </td>
-        <td className="px-4 py-2 text-xs text-muted">{r.classroomName}</td>
-        <td className="px-4 py-2">
-          <div className="flex items-center gap-2">
+        <td className="px-4 py-3 text-sm text-muted">{r.classroomName}</td>
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-3">
             <StudentAvatar
               name={`${r.firstName} ${r.lastName}`}
-              size={26}
+              size={32}
             />
             <div>
-              <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-ink">
+              <p className="flex flex-wrap items-center gap-1.5 text-base font-semibold text-ink">
                 {r.firstName} {r.lastName}
                 {r.isMakeup ? (
-                  <span className="inline-flex items-center gap-0.5 rounded-full bg-primary-soft px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary-strong">
-                    <Sparkles className="h-2.5 w-2.5" />
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-primary-strong">
+                    <Sparkles className="h-3 w-3" />
                     Make-up
                   </span>
                 ) : null}
                 {r.isManual ? (
-                  <span className="inline-flex items-center gap-0.5 rounded-full bg-accent-soft px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-accent">
-                    <Sparkles className="h-2.5 w-2.5" />
+                  <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-accent">
+                    <Sparkles className="h-3 w-3" />
                     Manual
                   </span>
                 ) : null}
               </p>
               {r.checkInAt ? (
-                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
+                <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
                   <span>
                     In{" "}
                     {new Date(r.checkInAt).toLocaleTimeString("en-US", {
@@ -467,7 +467,7 @@ function Th({
 }) {
   return (
     <th
-      className={`px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-muted ${className}`}
+      className={`px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.15em] text-muted ${className}`}
     >
       {children}
     </th>
