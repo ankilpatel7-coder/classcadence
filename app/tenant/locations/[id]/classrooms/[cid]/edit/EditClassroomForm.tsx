@@ -68,6 +68,11 @@ export function EditClassroomForm({
           {state.error}
         </p>
       ) : null}
+      {state.success ? (
+        <p className="rounded-md bg-success-soft px-3 py-2 text-sm text-success">
+          Saved.
+        </p>
+      ) : null}
 
       <div className="flex items-center gap-3">
         <Submit />

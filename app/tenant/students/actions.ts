@@ -75,6 +75,7 @@ const UpdateStudentSchema = StudentSchemaCore.extend({
 export type StudentState = {
   error: string | null;
   fieldErrors: Record<string, string>;
+  success?: boolean;
 };
 
 function notifyPrefsFrom(notify_email?: string, notify_whatsapp?: string) {
@@ -152,7 +153,7 @@ export async function updateStudentAction(
 
   revalidatePath("/tenant/students");
   revalidatePath(`/tenant/students/${id}/edit`);
-  redirect(`/tenant/students/${id}/edit?saved=1`);
+  return { error: null, fieldErrors: {}, success: true };
 }
 
 export async function deleteStudentAction(formData: FormData) {

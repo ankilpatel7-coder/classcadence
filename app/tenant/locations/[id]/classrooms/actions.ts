@@ -42,6 +42,7 @@ const UpdateClassroomSchema = z.object({
 export type ClassroomFormState = {
   error: string | null;
   fieldErrors: Partial<Record<string, string>>;
+  success?: boolean;
 };
 
 const empty: ClassroomFormState["fieldErrors"] = {};
@@ -139,7 +140,7 @@ export async function updateClassroomAction(
 
   revalidatePath(`/tenant/locations/${location_id}/edit`);
   revalidatePath(`/tenant/locations/${location_id}/classrooms/${id}/edit`);
-  redirect(`/tenant/locations/${location_id}/classrooms/${id}/edit?saved=1`);
+  return { error: null, fieldErrors: empty, success: true };
 }
 
 export async function deleteClassroomAction(formData: FormData) {

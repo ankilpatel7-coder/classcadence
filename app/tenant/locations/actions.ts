@@ -51,6 +51,7 @@ const UpdateLocationSchema = LocationCoreSchema.extend({
 export type LocationFormState = {
   error: string | null;
   fieldErrors: Partial<Record<string, string>>;
+  success?: boolean;
 };
 
 const empty: LocationFormState["fieldErrors"] = {};
@@ -151,7 +152,7 @@ export async function updateLocationAction(
   revalidatePath("/tenant");
   revalidatePath("/tenant/locations");
   revalidatePath(`/tenant/locations/${id}/edit`);
-  redirect(`/tenant/locations/${id}/edit?saved=1`);
+  return { error: null, fieldErrors: empty, success: true };
 }
 
 export async function deleteLocationAction(formData: FormData) {

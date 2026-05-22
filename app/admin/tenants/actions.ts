@@ -173,6 +173,7 @@ const UpdateTenantSchema = z.object({
 export type UpdateTenantState = {
   error: string | null;
   fieldErrors: Partial<Record<keyof z.infer<typeof UpdateTenantSchema>, string>>;
+  success?: boolean;
 };
 
 const emptyUpdateFieldErrors: UpdateTenantState["fieldErrors"] = {};
@@ -222,7 +223,8 @@ export async function updateTenantAction(
   }
 
   revalidatePath("/admin/tenants");
-  redirect("/admin/tenants");
+  revalidatePath(`/admin/tenants/${id}/edit`);
+  return { error: null, fieldErrors: emptyUpdateFieldErrors, success: true };
 }
 
 const UpdateAdminSchema = z.object({
