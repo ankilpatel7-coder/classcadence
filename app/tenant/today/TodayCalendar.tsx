@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
+import { CheckCheck } from "lucide-react";
 import { formatTimeInTimezone } from "@/lib/time";
 import { AttendanceRowActions } from "./AttendanceRowActions";
+import { checkInAllExpectedAction } from "./actions";
 
 export type AttendanceRow = {
   id: string;
@@ -136,8 +139,20 @@ export function TodayCalendar({
                         No students enrolled yet.
                       </p>
                     ) : (
-                      <ul className="divide-y divide-line">
-                        {s.records.map((r) => (
+                      <>
+                        {counts.expected > 0 ? (
+                          <div className="flex items-center justify-between gap-2 border-b border-line bg-bg/40 px-3 py-2">
+                            <span className="text-[10px] uppercase tracking-wider text-muted">
+                              {counts.expected} still to check in
+                            </span>
+                            <form action={checkInAllExpectedAction}>
+                              <input type="hidden" name="session_id" value={s.id} />
+                              <BulkCheckInButton />
+                            </form>
+                          </div>
+                        ) : null}
+                        <ul className="divide-y divide-line">
+                          {s.records.map((r) => (
                           <li
                             key={r.id}
                             className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
@@ -174,7 +189,8 @@ export function TodayCalendar({
                             />
                           </li>
                         ))}
-                      </ul>
+                        </ul>
+                      </>
                     )}
                   </div>
                 ) : null}
@@ -203,6 +219,20 @@ function countsByStatus(rows: AttendanceRow[]) {
     else c.other++;
   }
   return c;
+}
+
+function BulkCheckInButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="inline-flex items-center gap-1 rounded-md bg-success px-2.5 py-1 text-[11px] font-medium text-white shadow-emboss transition hover:brightness-110 disabled:opacity-60"
+    >
+      <CheckCheck className="h-3.5 w-3.5" />
+      {pending ? "Checking in…" : "Check in all expected"}
+    </button>
+  );
 }
 
 function CountsPill({

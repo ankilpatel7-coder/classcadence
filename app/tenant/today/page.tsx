@@ -6,8 +6,10 @@ import {
   localToUtc,
   todayInTimezone,
 } from "@/lib/time";
+import { CheckCheck } from "lucide-react";
 import { AttendanceRowActions } from "./AttendanceRowActions";
 import { TodayCalendar, type CalendarSession } from "./TodayCalendar";
+import { checkInAllExpectedAction } from "./actions";
 
 export const metadata = { title: "Today — ClassCadence" };
 export const dynamic = "force-dynamic";
@@ -193,6 +195,10 @@ export default async function TodayPage({
                 )
               );
 
+              const expectedCount = records.filter(
+                (r) => r.status === "expected"
+              ).length;
+
               return (
                 <section
                   key={session.id}
@@ -210,6 +216,23 @@ export default async function TodayPage({
                     </div>
                     <p className="text-xs text-muted">{records.length} expected</p>
                   </header>
+                  {expectedCount > 0 ? (
+                    <div className="flex items-center justify-between gap-2 border-b border-line bg-bg/40 px-4 py-2">
+                      <span className="text-[11px] text-muted">
+                        {expectedCount} still to check in
+                      </span>
+                      <form action={checkInAllExpectedAction}>
+                        <input type="hidden" name="session_id" value={session.id} />
+                        <button
+                          type="submit"
+                          className="inline-flex items-center gap-1 rounded-md bg-success px-2.5 py-1 text-xs font-medium text-white shadow-emboss"
+                        >
+                          <CheckCheck className="h-3.5 w-3.5" />
+                          Check in all
+                        </button>
+                      </form>
+                    </div>
+                  ) : null}
 
                   {records.length === 0 ? (
                     <p className="px-4 py-6 text-center text-sm text-muted">

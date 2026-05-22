@@ -12,6 +12,7 @@ import { MobileNav } from "@/app/_components/MobileNav";
 const BASE_NAV_LINKS = [
   { href: "/tenant", label: "Home" },
   { href: "/tenant/today", label: "Today" },
+  { href: "/tenant/schedule", label: "Schedule" },
   { href: "/tenant/households", label: "Households" },
   { href: "/tenant/locations", label: "Locations" },
 ];

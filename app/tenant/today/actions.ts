@@ -199,3 +199,29 @@ export async function updateAttendanceAction(formData: FormData) {
   revalidatePath("/tenant/today");
   redirect("/tenant/today");
 }
+
+// ============ Bulk check-in for one session ============
+
+export async function checkInAllExpectedAction(formData: FormData) {
+  const user = await getCurrentUserOrRedirect();
+  if (!canWriteAttendance(user.role)) redirect("/tenant/today?error=forbidden");
+
+  const sessionId = formData.get("session_id");
+  if (typeof sessionId !== "string" || !/^[0-9a-f-]{36}$/i.test(sessionId)) {
+    redirect("/tenant/today?error=invalid-session");
+  }
+
+  const supabase = createSupabaseServerClient();
+  const nowIso = new Date().toISOString();
+
+  const { error } = await supabase
+    .from("attendance_records")
+    .update({ status: "present", check_in_at: nowIso })
+    .eq("session_id", sessionId)
+    .eq("status", "expected");
+
+  if (error) redirect(`/tenant/today?error=${encodeURIComponent(error.message)}`);
+
+  revalidatePath("/tenant/today");
+  redirect("/tenant/today");
+}
