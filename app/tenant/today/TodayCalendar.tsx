@@ -6,6 +6,8 @@ import { CheckCheck } from "lucide-react";
 import { formatTimeInTimezone } from "@/lib/time";
 import { AttendanceRowActions } from "./AttendanceRowActions";
 import { checkInAllExpectedAction } from "./actions";
+import { LessonNoteWidget, type ExistingNote } from "./LessonNoteWidget";
+import { OfferMakeupButton } from "./OfferMakeupButton";
 
 export type AttendanceRow = {
   id: string;
@@ -13,6 +15,7 @@ export type AttendanceRow = {
   check_in_at: string | null;
   check_out_at: string | null;
   student: { id: string; first_name: string; last_name: string };
+  notes: ExistingNote[];
 };
 
 export type CalendarSession = {
@@ -187,6 +190,15 @@ export function TodayCalendar({
                               checkedIn={!!r.check_in_at}
                               checkedOut={!!r.check_out_at}
                             />
+                            {r.status === "absent" ? (
+                              <OfferMakeupButton attendanceId={r.id} />
+                            ) : null}
+                            <div className="basis-full">
+                              <LessonNoteWidget
+                                attendanceId={r.id}
+                                existingNotes={r.notes}
+                              />
+                            </div>
                           </li>
                         ))}
                         </ul>

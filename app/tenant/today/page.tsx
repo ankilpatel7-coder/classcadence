@@ -20,6 +20,7 @@ type AttendanceRow = {
   check_in_at: string | null;
   check_out_at: string | null;
   students: { id: string; first_name: string; last_name: string };
+  lesson_notes: { body: string; visibility: string; created_at: string }[] | null;
 };
 
 type SessionRow = {
@@ -55,7 +56,7 @@ function minutesIntoDay(utc: string, tz: string): number {
 export default async function TodayPage({
   searchParams,
 }: {
-  searchParams: { error?: string };
+  searchParams: { error?: string; makeup_url?: string };
 }) {
   await getCurrentUserOrRedirect();
   const supabase = createSupabaseServerClient();
@@ -88,7 +89,8 @@ export default async function TodayPage({
        ),
        attendance_records(
          id, status, check_in_at, check_out_at,
-         students!inner(id, first_name, last_name)
+         students!inner(id, first_name, last_name),
+         lesson_notes(body, visibility, created_at)
        )`
     )
     .gte("scheduled_start_utc", startUtc)
@@ -133,6 +135,13 @@ export default async function TodayPage({
         check_in_at: r.check_in_at,
         check_out_at: r.check_out_at,
         student: r.students,
+        notes: (r.lesson_notes ?? []).map((n) => ({
+          body: n.body,
+          visibility: (n.visibility === "parent" ? "parent" : "internal") as
+            | "parent"
+            | "internal",
+          createdAt: n.created_at,
+        })),
       })),
   }));
 
@@ -155,6 +164,19 @@ export default async function TodayPage({
       {searchParams.error ? (
         <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
           {decodeURIComponent(searchParams.error)}
+        </div>
+      ) : null}
+
+      {searchParams.makeup_url ? (
+        <div className="rounded-md border border-primary/30 bg-primary-soft/40 px-4 py-3 text-sm text-ink">
+          <p className="font-medium text-primary-strong">Make-up offer created.</p>
+          <p className="mt-1 text-xs text-muted">
+            Share this link with the parent. They can accept or decline without
+            signing in. The link expires in 7 days.
+          </p>
+          <p className="mt-2 break-all rounded-md border border-line bg-surface px-2 py-1 font-mono text-xs">
+            {decodeURIComponent(searchParams.makeup_url)}
+          </p>
         </div>
       ) : null}
 

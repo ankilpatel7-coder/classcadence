@@ -11,11 +11,11 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Primary anchor
+        // Primary anchor — Emerald to match the brand mark.
         primary: {
-          DEFAULT: "#1E3A8A",    // Cadence Indigo
-          soft: "#DBEAFE",       // Indigo Mist
-          strong: "#172554",
+          DEFAULT: "#1AA876",    // Brand Emerald
+          soft: "#D6F4E5",       // Light wash
+          strong: "#0B6845",     // Deep emerald
         },
         success: {
           DEFAULT: "#16A34A",    // Bell Green — Present status

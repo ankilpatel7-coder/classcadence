@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { materializeSessions } from "@/app/tenant/today/actions";
@@ -183,26 +184,9 @@ export async function seedDemoDataAction() {
   let enrollmentsInserted = 0;
 
   for (const sample of SAMPLE_HOUSEHOLDS) {
-    const { data: hh, error: hhErr } = await supabase
-      .from("households")
-      .insert({
-        tenant_id: user.tenantId,
-        primary_parent_name: sample.primary_parent_name,
-        primary_email: sample.primary_email,
-        primary_phone: sample.primary_phone,
-        secondary_parent_name: sample.secondary_parent_name ?? null,
-        secondary_email: sample.secondary_email ?? null,
-        secondary_phone: sample.secondary_phone ?? null,
-        mailing_address: sample.mailing_address ?? null,
-        notification_prefs_json: {
-          email: true,
-          whatsapp: true,
-          source: DEMO_TAG,
-        },
-      })
-      .select("id")
-      .single();
-    if (hhErr || !hh) continue;
+    // We no longer create a household row — parent info lives on each student
+    // record directly. We still track "demo households" via the count for the
+    // success banner, since the BA copy still talks in family terms.
     householdsInserted++;
 
     for (const stu of sample.students) {
@@ -210,13 +194,24 @@ export async function seedDemoDataAction() {
         .from("students")
         .insert({
           tenant_id: user.tenantId,
-          household_id: hh.id,
           location_id: location.id,
           first_name: stu.first_name,
           last_name: stu.last_name,
           grade_level: stu.grade_level,
           lifecycle_status: stu.lifecycle_status,
           internal_notes: DEMO_TAG,
+          primary_parent_name: sample.primary_parent_name,
+          primary_email: sample.primary_email,
+          primary_phone: sample.primary_phone,
+          secondary_parent_name: sample.secondary_parent_name ?? null,
+          secondary_email: sample.secondary_email ?? null,
+          secondary_phone: sample.secondary_phone ?? null,
+          mailing_address: sample.mailing_address ?? null,
+          notification_prefs_json: {
+            email: true,
+            whatsapp: true,
+            source: DEMO_TAG,
+          },
         })
         .select("id")
         .single();
@@ -285,6 +280,7 @@ export async function wipeDemoDataAction() {
     studentsDeleted = studentIds.length;
   }
 
+  // Legacy household demo cleanup (kept for any leftover rows from pre-0003 seeds).
   const { data: demoHouseholds } = await supabase
     .from("households")
     .select("id, notification_prefs_json")
@@ -303,10 +299,7 @@ export async function wipeDemoDataAction() {
       .from("households")
       .delete()
       .in("id", demoHouseholdIds);
-    if (error) {
-      redirect(`/tenant/settings?error=${encodeURIComponent(error.message)}`);
-    }
-    householdsDeleted = demoHouseholdIds.length;
+    if (!error) householdsDeleted = demoHouseholdIds.length;
   }
 
   revalidatePath("/tenant/households");
@@ -314,6 +307,60 @@ export async function wipeDemoDataAction() {
   redirect(
     `/tenant/settings?wiped_students=${studentsDeleted}&wiped_households=${householdsDeleted}`
   );
+}
+
+// ============ Branding (BA 8.19) ============
+
+const BrandingSchema = z.object({
+  primary_color_hex: z
+    .string()
+    .trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Use a 6-digit hex color, e.g. #1AA876."),
+  logo_url: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : null)),
+  sender_display_name: z
+    .string()
+    .trim()
+    .max(120)
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : null)),
+});
+
+export type BrandingState = { error: string | null; success: boolean };
+
+export async function saveBrandingAction(
+  _prev: BrandingState,
+  formData: FormData
+): Promise<BrandingState> {
+  const user = await getCurrentUserOrRedirect();
+  ensureAdmin(user.role);
+  if (!user.tenantId) return { error: "No tenant context.", success: false };
+
+  const parsed = BrandingSchema.safeParse({
+    primary_color_hex: formData.get("primary_color_hex"),
+    logo_url: formData.get("logo_url"),
+    sender_display_name: formData.get("sender_display_name"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input.", success: false };
+  }
+
+  const supabase = createSupabaseServerClient();
+  const { error } = await supabase
+    .from("branding_assets")
+    .upsert(
+      { tenant_id: user.tenantId, ...parsed.data },
+      { onConflict: "tenant_id" }
+    );
+  if (error) return { error: error.message, success: false };
+
+  revalidatePath("/tenant/settings");
+  revalidatePath("/tenant");
+  return { error: null, success: true };
 }
 
 export async function wipeAllTenantDataAction() {

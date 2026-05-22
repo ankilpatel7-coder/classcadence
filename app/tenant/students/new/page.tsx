@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
@@ -8,20 +8,9 @@ import { CreateStudentForm } from "./CreateStudentForm";
 export const metadata = { title: "Add student — ClassCadence" };
 export const dynamic = "force-dynamic";
 
-export default async function NewStudentPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function NewStudentPage() {
   await getCurrentUserOrRedirect();
   const supabase = createSupabaseServerClient();
-
-  const { data: household } = await supabase
-    .from("households")
-    .select("id, primary_parent_name")
-    .eq("id", params.id)
-    .maybeSingle();
-  if (!household) notFound();
 
   const { data: locations } = await supabase
     .from("locations")
@@ -38,11 +27,11 @@ export default async function NewStudentPage({
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <Link
-        href={`/tenant/households/${household.id}/edit`}
+        href="/tenant/students"
         className="inline-flex items-center gap-1 text-sm text-muted transition hover:text-ink"
       >
         <ChevronLeft className="h-4 w-4" />
-        Back to {household.primary_parent_name}
+        Back to students
       </Link>
 
       <div>
@@ -52,8 +41,8 @@ export default async function NewStudentPage({
         </p>
       </div>
 
-      <div className="rounded-lg border border-line bg-surface p-6 shadow-card">
-        <CreateStudentForm householdId={household.id} locations={locations} />
+      <div className="panel p-6">
+        <CreateStudentForm locations={locations} />
       </div>
     </div>
   );

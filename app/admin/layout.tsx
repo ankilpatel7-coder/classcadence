@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { signOutAction } from "@/app/login/actions";
 import { Logo } from "@/app/_components/Logo";
+import { UserMenu } from "@/app/_components/UserMenu";
 
 export const metadata = {
   title: "Admin — ClassCadence",
@@ -41,15 +42,12 @@ export default async function AdminLayout({
               Super Admin
             </span>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted md:gap-4">
-            <span className="hidden truncate sm:inline">
-              {profile.full_name || profile.email}
-            </span>
-            <form action={signOutAction}>
-              <button type="submit" className="btn-secondary !px-3 !py-1.5 text-sm">
-                Sign out
-              </button>
-            </form>
+          <div className="flex items-center gap-3">
+            <UserMenu
+              fullName={profile.full_name || ""}
+              email={profile.email}
+              subtitle="Super Admin"
+            />
           </div>
         </div>
       </header>

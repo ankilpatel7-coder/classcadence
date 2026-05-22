@@ -6,9 +6,9 @@
 
 :root {
   /* Source: ClassCadence_BA_Document.docx Section 3.11 */
-  --color-primary: #1E3A8A;
-  --color-primary-soft: #DBEAFE;
-  --color-primary-strong: #172554;
+  --color-primary: #1AA876;
+  --color-primary-soft: #D6F4E5;
+  --color-primary-strong: #0B6845;
   --color-success: #16A34A;
   --color-success-soft: #DCFCE7;
   --color-accent: #F97316;
@@ -36,7 +36,7 @@ body {
   background-image:
     radial-gradient(
       ellipse 1400px 700px at 50% -100px,
-      rgba(219, 234, 254, 0.55),
+      rgba(214, 244, 229, 0.7),
       transparent 70%
     ),
     radial-gradient(
@@ -85,12 +85,12 @@ h1 {
       linear-gradient(to bottom, rgba(255, 255, 255, 1), rgba(251, 250, 247, 0.6));
   }
 
-  /* Primary button — embossed look, soft gradient, deeper hover lift */
+  /* Primary button — emerald embossed look, soft gradient, deeper hover lift */
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white shadow-emboss transition active:translate-y-px;
     background-image: linear-gradient(
       180deg,
-      #2746a1 0%,
+      #2BC98A 0%,
       var(--color-primary) 55%,
       var(--color-primary-strong) 100%
     );
@@ -98,7 +98,7 @@ h1 {
   .btn-primary:hover:not(:disabled) {
     box-shadow:
       0 2px 4px rgba(15, 23, 42, 0.1),
-      0 12px 24px -8px rgba(30, 58, 138, 0.35),
+      0 12px 24px -8px rgba(11, 104, 69, 0.35),
       inset 0 1px 0 rgba(255, 255, 255, 0.5);
   }
   .btn-primary:disabled {
@@ -137,7 +137,7 @@ h1 {
     height: 6px;
     border-radius: 9999px;
     background: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.12);
+    box-shadow: 0 0 0 3px rgba(26, 168, 118, 0.18);
   }
 }
 
@@ -145,6 +145,6 @@ h1 {
 button:focus-visible,
 a:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 4px rgba(30, 58, 138, 0.18);
+  box-shadow: 0 0 0 4px rgba(26, 168, 118, 0.25);
   border-radius: 6px;
 }

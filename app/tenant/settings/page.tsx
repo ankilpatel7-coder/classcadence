@@ -7,6 +7,7 @@ import {
   WipeAllButton,
   WipeDemoButton,
 } from "./SettingsActions";
+import { BrandingForm } from "./BrandingForm";
 
 export const metadata = { title: "Settings — ClassCadence" };
 export const dynamic = "force-dynamic";
@@ -51,7 +52,6 @@ export default async function SettingsPage({
     locationCount,
     classroomCount,
     timeSlotCount,
-    householdCount,
     studentCount,
     enrollmentCount,
     sessionCount,
@@ -60,7 +60,6 @@ export default async function SettingsPage({
     countOf(supabase, "locations"),
     countOf(supabase, "classrooms"),
     countOf(supabase, "time_slots"),
-    countOf(supabase, "households"),
     countOf(supabase, "students"),
     countOf(supabase, "enrollments"),
     countOf(supabase, "sessions"),
@@ -73,11 +72,16 @@ export default async function SettingsPage({
     locationCount +
     classroomCount +
     timeSlotCount +
-    householdCount +
     studentCount +
     enrollmentCount +
     sessionCount +
     attendanceCount;
+
+  const { data: branding } = await supabase
+    .from("branding_assets")
+    .select("primary_color_hex, logo_url, sender_display_name")
+    .eq("tenant_id", user.tenantId)
+    .maybeSingle();
 
   const seededHouseholds = searchParams.seeded_households;
   const wipedAll = searchParams.wiped_all;
@@ -131,7 +135,6 @@ export default async function SettingsPage({
           <Stat label="Locations" value={locationCount} />
           <Stat label="Classrooms" value={classroomCount} />
           <Stat label="Time slots" value={timeSlotCount} />
-          <Stat label="Households" value={householdCount} />
           <Stat label="Students" value={studentCount} />
           <Stat label="Enrollments" value={enrollmentCount} />
           <Stat label="Sessions" value={sessionCount} />
@@ -150,6 +153,20 @@ export default async function SettingsPage({
           Inngest.)
         </p>
         <MaterializeButton />
+      </Card>
+
+      <Card title="Branding">
+        <p className="mb-4 text-sm text-muted">
+          Tweak the primary color and logo used inside your tenant. Changes apply
+          across this tenant only — other centers on ClassCadence keep their own.
+        </p>
+        <BrandingForm
+          defaults={{
+            primary_color_hex: branding?.primary_color_hex ?? "#1AA876",
+            logo_url: branding?.logo_url ?? "",
+            sender_display_name: branding?.sender_display_name ?? "",
+          }}
+        />
       </Card>
 
       <Card title="Demo data">

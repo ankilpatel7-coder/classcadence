@@ -10,18 +10,11 @@ export const metadata = { title: "Edit student — ClassCadence" };
 export const dynamic = "force-dynamic";
 
 const WEEKDAY_LABEL: Record<string, string> = {
-  mon: "Mon",
-  tue: "Tue",
-  wed: "Wed",
-  thu: "Thu",
-  fri: "Fri",
-  sat: "Sat",
-  sun: "Sun",
+  mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun",
 };
 
 type StudentRow = {
   id: string;
-  household_id: string;
   location_id: string;
   first_name: string;
   last_name: string;
@@ -29,13 +22,21 @@ type StudentRow = {
   grade_level: string | null;
   lifecycle_status: string;
   internal_notes: string | null;
+  primary_parent_name: string | null;
+  primary_email: string | null;
+  primary_phone: string | null;
+  secondary_parent_name: string | null;
+  secondary_email: string | null;
+  secondary_phone: string | null;
+  mailing_address: string | null;
+  notification_prefs_json: { email?: boolean; whatsapp?: boolean } | null;
 };
 
 export default async function EditStudentPage({
   params,
   searchParams,
 }: {
-  params: { id: string; sid: string };
+  params: { id: string };
   searchParams: { created?: string; saved?: string; error?: string; ended?: string };
 }) {
   await getCurrentUserOrRedirect();
@@ -44,19 +45,17 @@ export default async function EditStudentPage({
   const { data: student } = await supabase
     .from("students")
     .select(
-      "id, household_id, location_id, first_name, last_name, dob, grade_level, lifecycle_status, internal_notes"
+      "id, location_id, first_name, last_name, dob, grade_level, lifecycle_status, internal_notes, primary_parent_name, primary_email, primary_phone, secondary_parent_name, secondary_email, secondary_phone, mailing_address, notification_prefs_json"
     )
-    .eq("id", params.sid)
+    .eq("id", params.id)
     .maybeSingle();
-  if (!student || student.household_id !== params.id) notFound();
+  if (!student) notFound();
   const s = student as StudentRow;
+  const notify = s.notification_prefs_json ?? { email: true, whatsapp: true };
 
   const { data: locations } = await supabase
-    .from("locations")
-    .select("id, name")
-    .order("name");
+    .from("locations").select("id, name").order("name");
 
-  // All active time slots in this tenant, joined with classroom + location for labelling.
   const { data: slotsData } = await supabase
     .from("time_slots")
     .select(
@@ -69,13 +68,8 @@ export default async function EditStudentPage({
     weekday: string;
     start_time: string;
     end_time: string;
-    classrooms: {
-      name: string;
-      status: string;
-      locations: { name: string; status: string };
-    };
+    classrooms: { name: string; status: string; locations: { name: string; status: string } };
   };
-
   const slotOptions: SlotOption[] = ((slotsData ?? []) as unknown as SlotRowRaw[])
     .filter(
       (slot) =>
@@ -109,26 +103,26 @@ export default async function EditStudentPage({
       classrooms: { name: string; locations: { name: string } };
     };
   };
-  const enrollments: EnrollmentRow[] = (
-    (enrollmentsData ?? []) as unknown as EnrRaw[]
-  ).map((e) => ({
-    id: e.id,
-    effective_from: e.effective_from,
-    effective_to: e.effective_to,
-    slot_label:
-      `${WEEKDAY_LABEL[e.time_slots.weekday] ?? e.time_slots.weekday} ` +
-      `${String(e.time_slots.start_time).slice(0, 5)}–${String(e.time_slots.end_time).slice(0, 5)} · ` +
-      `${e.time_slots.classrooms.name} · ${e.time_slots.classrooms.locations.name}`,
-  }));
+  const enrollments: EnrollmentRow[] = ((enrollmentsData ?? []) as unknown as EnrRaw[]).map(
+    (e) => ({
+      id: e.id,
+      effective_from: e.effective_from,
+      effective_to: e.effective_to,
+      slot_label:
+        `${WEEKDAY_LABEL[e.time_slots.weekday] ?? e.time_slots.weekday} ` +
+        `${String(e.time_slots.start_time).slice(0, 5)}–${String(e.time_slots.end_time).slice(0, 5)} · ` +
+        `${e.time_slots.classrooms.name} · ${e.time_slots.classrooms.locations.name}`,
+    })
+  );
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <Link
-        href={`/tenant/households/${s.household_id}/edit`}
+        href="/tenant/students"
         className="inline-flex items-center gap-1 text-sm text-muted transition hover:text-ink"
       >
         <ChevronLeft className="h-4 w-4" />
-        Back to household
+        Back to students
       </Link>
 
       <div>
@@ -143,35 +137,44 @@ export default async function EditStudentPage({
       {searchParams.created ? <Flash kind="success">Student created. Enroll them in a time slot below.</Flash> : null}
       {searchParams.saved ? <Flash kind="success">Saved.</Flash> : null}
       {searchParams.ended ? <Flash kind="success">Enrollment ended.</Flash> : null}
-      {searchParams.error ? (
-        <Flash kind="danger">{decodeURIComponent(searchParams.error)}</Flash>
-      ) : null}
+      {searchParams.error ? <Flash kind="danger">{decodeURIComponent(searchParams.error)}</Flash> : null}
 
-      <section className="rounded-lg border border-line bg-surface p-6 shadow-card">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
-          Details
-        </h2>
+      <section className="panel p-6">
+        <h2 className="section-eyebrow">Details</h2>
         <div className="mt-4">
           <EditStudentForm
-            student={s}
+            student={{
+              id: s.id,
+              location_id: s.location_id,
+              first_name: s.first_name,
+              last_name: s.last_name,
+              dob: s.dob,
+              grade_level: s.grade_level,
+              lifecycle_status: s.lifecycle_status,
+              internal_notes: s.internal_notes,
+              primary_parent_name: s.primary_parent_name ?? undefined,
+              primary_email: s.primary_email,
+              primary_phone: s.primary_phone,
+              secondary_parent_name: s.secondary_parent_name,
+              secondary_email: s.secondary_email,
+              secondary_phone: s.secondary_phone,
+              mailing_address: s.mailing_address,
+              notify_email: notify.email ?? true,
+              notify_whatsapp: notify.whatsapp ?? true,
+            }}
             locations={locations ?? []}
-            householdId={s.household_id}
           />
         </div>
       </section>
 
-      <section className="rounded-lg border border-line bg-surface p-6 shadow-card">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
-          Enrollments
-        </h2>
+      <section className="panel p-6">
+        <h2 className="section-eyebrow">Enrollments</h2>
         <p className="mt-1 text-xs text-muted">
-          Each enrollment ties this student to a weekly time slot. Future sessions
-          materialize automatically into the Today screen.
+          Each enrollment ties this student to a weekly time slot.
         </p>
         <div className="mt-4">
           <EnrollmentsSection
             studentId={s.id}
-            householdId={s.household_id}
             enrollments={enrollments}
             slotOptions={slotOptions}
           />
@@ -182,11 +185,9 @@ export default async function EditStudentPage({
 }
 
 function Flash({
-  kind,
-  children,
+  kind, children,
 }: {
-  kind: "success" | "danger";
-  children: React.ReactNode;
+  kind: "success" | "danger"; children: React.ReactNode;
 }) {
   const styles =
     kind === "success"

@@ -7,11 +7,11 @@ import {
   enrollStudentAction,
   endEnrollmentAction,
   type EnrollState,
-} from "../../../../actions";
+} from "../../actions";
 
 export type SlotOption = {
   id: string;
-  label: string; // e.g. "Mon 16:00–17:00 · Room A · Main"
+  label: string;
 };
 
 export type EnrollmentRow = {
@@ -26,11 +26,7 @@ const initialState: EnrollState = { error: null, success: false };
 function Submit() {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-card transition hover:bg-primary-strong disabled:opacity-60"
-    >
+    <button type="submit" disabled={pending} className="btn-primary">
       {pending ? "Enrolling…" : "Enroll"}
     </button>
   );
@@ -43,13 +39,7 @@ function EndButton() {
       type="submit"
       disabled={pending}
       onClick={(e) => {
-        if (
-          !window.confirm(
-            "End this enrollment today? Past sessions stay intact; the student " +
-              "stops being expected on future sessions of this slot."
-          )
-        )
-          e.preventDefault();
+        if (!window.confirm("End this enrollment today?")) e.preventDefault();
       }}
       className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink transition hover:bg-bg disabled:opacity-60"
     >
@@ -61,12 +51,10 @@ function EndButton() {
 
 export function EnrollmentsSection({
   studentId,
-  householdId,
   enrollments,
   slotOptions,
 }: {
   studentId: string;
-  householdId: string;
   enrollments: EnrollmentRow[];
   slotOptions: SlotOption[];
 }) {
@@ -101,7 +89,6 @@ export function EnrollmentsSection({
                 <form action={endEnrollmentAction}>
                   <input type="hidden" name="id" value={e.id} />
                   <input type="hidden" name="student_id" value={studentId} />
-                  <input type="hidden" name="household_id" value={householdId} />
                   <EndButton />
                 </form>
               )}
@@ -132,17 +119,12 @@ export function EnrollmentsSection({
                 className="form-input mt-1"
               >
                 {slotOptions.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
+                  <option key={s.id} value={s.id}>{s.label}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label
-                htmlFor="effective_from"
-                className="block text-xs font-medium text-muted"
-              >
+              <label htmlFor="effective_from" className="block text-xs font-medium text-muted">
                 Starts
               </label>
               <input

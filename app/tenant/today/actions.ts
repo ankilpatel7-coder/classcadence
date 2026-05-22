@@ -200,6 +200,47 @@ export async function updateAttendanceAction(formData: FormData) {
   redirect("/tenant/today");
 }
 
+// ============ Lesson notes (BA 8.16) ============
+
+const NoteSchema = z.object({
+  attendance_id: z.string().uuid(),
+  body: z.string().trim().min(1, "Note cannot be empty.").max(2000),
+  visibility: z.enum(["internal", "parent"]).default("internal"),
+});
+
+export type LessonNoteState = { error: string | null; success: boolean };
+
+export async function saveLessonNoteAction(
+  _prev: LessonNoteState,
+  formData: FormData
+): Promise<LessonNoteState> {
+  const user = await getCurrentUserOrRedirect();
+  if (!canWriteAttendance(user.role)) {
+    return { error: "Not allowed.", success: false };
+  }
+
+  const parsed = NoteSchema.safeParse({
+    attendance_id: formData.get("attendance_id"),
+    body: formData.get("body"),
+    visibility: formData.get("visibility") || "internal",
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input.", success: false };
+  }
+
+  const supabase = createSupabaseServerClient();
+  const { error } = await supabase.from("lesson_notes").insert({
+    attendance_record_id: parsed.data.attendance_id,
+    body: parsed.data.body,
+    visibility: parsed.data.visibility,
+    author_id: user.id,
+  });
+  if (error) return { error: error.message, success: false };
+
+  revalidatePath("/tenant/today");
+  return { error: null, success: true };
+}
+
 // ============ Bulk check-in for one session ============
 
 export async function checkInAllExpectedAction(formData: FormData) {

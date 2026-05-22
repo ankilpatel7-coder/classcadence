@@ -8,12 +8,13 @@ import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { signOutAction } from "@/app/login/actions";
 import { Logo } from "@/app/_components/Logo";
 import { MobileNav } from "@/app/_components/MobileNav";
+import { UserMenu } from "@/app/_components/UserMenu";
 
 const BASE_NAV_LINKS = [
   { href: "/tenant", label: "Home" },
   { href: "/tenant/today", label: "Today" },
   { href: "/tenant/schedule", label: "Schedule" },
-  { href: "/tenant/households", label: "Households" },
+  { href: "/tenant/students", label: "Students" },
   { href: "/tenant/locations", label: "Locations" },
 ];
 
@@ -50,13 +51,18 @@ export default async function TenantLayout({
     redirect("/login?error=no-tenant");
   }
 
-  // Read the tenant name. Service client avoids any RLS edge cases on first load.
+  // Read the tenant name + branding. Service client avoids any RLS edge cases on first load.
   const service = createSupabaseServiceClient();
-  const { data: tenant } = await service
-    .from("tenants")
-    .select("name, status")
-    .eq("id", user.tenantId)
-    .maybeSingle();
+  const [{ data: tenant }, { data: branding }] = await Promise.all([
+    service.from("tenants").select("name, status").eq("id", user.tenantId).maybeSingle(),
+    service
+      .from("branding_assets")
+      .select("primary_color_hex")
+      .eq("tenant_id", user.tenantId)
+      .maybeSingle(),
+  ]);
+
+  const brandColor = branding?.primary_color_hex ?? "#1AA876";
 
   // Suspended tenants are blocked here (BA FR-TM-03).
   if (tenant?.status === "suspended") {
@@ -71,7 +77,10 @@ export default async function TenantLayout({
       : BASE_NAV_LINKS;
 
   return (
-    <div className="min-h-screen">
+    <div
+      className="min-h-screen"
+      style={{ "--color-primary": brandColor } as React.CSSProperties}
+    >
       <header className="relative border-b border-line/70 bg-surface/80 backdrop-blur-md shadow-[0_1px_0_rgba(255,255,255,0.6)_inset,0_8px_24px_-16px_rgba(15,23,42,0.10)]">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 md:px-6 md:py-4">
           <div className="flex min-w-0 items-center gap-3 md:gap-6">
@@ -89,15 +98,14 @@ export default async function TenantLayout({
             ))}
           </nav>
 
-          <div className="flex items-center gap-2 md:gap-4">
-            <span className="hidden truncate text-sm text-muted md:inline">
-              {user.fullName || user.email}
-            </span>
-            <form action={signOutAction} className="hidden md:block">
-              <button type="submit" className="btn-secondary !px-3 !py-1.5 text-sm">
-                Sign out
-              </button>
-            </form>
+          <div className="flex items-center gap-2 md:gap-3">
+            <div className="hidden md:block">
+              <UserMenu
+                fullName={user.fullName || ""}
+                email={user.email}
+                subtitle={tenant?.name ?? undefined}
+              />
+            </div>
 
             <MobileNav
               links={navLinks}
@@ -106,6 +114,9 @@ export default async function TenantLayout({
                   <p className="text-xs text-muted">
                     Signed in as {user.fullName || user.email}
                   </p>
+                  {tenant?.name ? (
+                    <p className="text-xs text-muted">{tenant.name}</p>
+                  ) : null}
                   <form action={signOutAction}>
                     <button
                       type="submit"

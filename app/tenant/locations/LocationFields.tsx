@@ -15,6 +15,7 @@ export type LocationDefaults = {
   iana_timezone?: string;
   phone?: string | null;
   support_email?: string | null;
+  max_classes_per_student_per_week?: number;
 };
 
 export function LocationFields({
@@ -162,6 +163,25 @@ export function LocationFields({
           />
         </Field>
       </div>
+
+      <Field
+        id="max_classes_per_student_per_week"
+        label="Max classes per student per week"
+        hint="Caps how many active enrollments a single student can have at this location. Used at enrollment time."
+        error={fieldErrors.max_classes_per_student_per_week}
+        required
+      >
+        <input
+          id="max_classes_per_student_per_week"
+          name="max_classes_per_student_per_week"
+          type="number"
+          min={1}
+          max={20}
+          required
+          defaultValue={defaults.max_classes_per_student_per_week ?? 2}
+          className="form-input"
+        />
+      </Field>
     </div>
   );
 }

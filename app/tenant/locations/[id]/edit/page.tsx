@@ -35,6 +35,7 @@ type LocationRow = {
   phone: string | null;
   support_email: string | null;
   status: "active" | "inactive";
+  max_classes_per_student_per_week: number;
 };
 
 export default async function EditLocationPage({
@@ -56,7 +57,7 @@ export default async function EditLocationPage({
   const { data: location, error } = await supabase
     .from("locations")
     .select(
-      "id, name, address_line1, address_line2, city, region, postal_code, country, iana_timezone, phone, support_email, status"
+      "id, name, address_line1, address_line2, city, region, postal_code, country, iana_timezone, phone, support_email, status, max_classes_per_student_per_week"
     )
     .eq("id", params.id)
     .maybeSingle();

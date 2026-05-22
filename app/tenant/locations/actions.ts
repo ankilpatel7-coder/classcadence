@@ -34,6 +34,11 @@ const LocationCoreSchema = z.object({
       (v) => v === null || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
       { message: "Enter a valid email or leave blank." }
     ),
+  max_classes_per_student_per_week: z.coerce
+    .number()
+    .int("Quota must be a whole number.")
+    .min(1, "Quota must be at least 1.")
+    .max(20, "Quota cannot exceed 20."),
 });
 
 const CreateLocationSchema = LocationCoreSchema;
@@ -82,6 +87,7 @@ export async function createLocationAction(
     iana_timezone: formData.get("iana_timezone"),
     phone: formData.get("phone"),
     support_email: formData.get("support_email"),
+    max_classes_per_student_per_week: formData.get("max_classes_per_student_per_week") || 2,
   });
   if (!parsed.success) {
     return {
@@ -127,6 +133,7 @@ export async function updateLocationAction(
     iana_timezone: formData.get("iana_timezone"),
     phone: formData.get("phone"),
     support_email: formData.get("support_email"),
+    max_classes_per_student_per_week: formData.get("max_classes_per_student_per_week") || 2,
     status: formData.get("status"),
   });
   if (!parsed.success) {
