@@ -20,7 +20,7 @@ function Submit({ label, pendingLabel }: { label: string; pendingLabel: string }
     <button
       type="submit"
       disabled={pending}
-      className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-card transition hover:bg-primary-strong disabled:opacity-60"
+      className="btn-primary"
     >
       {pending ? pendingLabel : label}
     </button>
@@ -148,7 +148,7 @@ export function InviteAdminForm({ tenantId }: { tenantId: string }) {
               <button
                 type="button"
                 onClick={() => setRevealPassword((v) => !v)}
-                className="rounded-md border border-line bg-surface px-3 text-xs text-ink transition hover:bg-bg"
+                className="btn-secondary !px-3 !py-1.5"
               >
                 {revealPassword ? "Hide" : "Show"}
               </button>
@@ -159,7 +159,7 @@ export function InviteAdminForm({ tenantId }: { tenantId: string }) {
                   setPasswordValue(next);
                   setRevealPassword(true);
                 }}
-                className="rounded-md border border-line bg-surface px-3 text-xs text-ink transition hover:bg-bg"
+                className="btn-secondary !px-3 !py-1.5"
               >
                 Generate
               </button>
@@ -255,7 +255,7 @@ function CredentialsBanner({ email, password }: { email: string; password: strin
       <button
         type="button"
         onClick={copyAll}
-        className="mt-3 rounded-md border border-line bg-surface px-3 py-1.5 text-xs font-medium text-ink transition hover:bg-bg"
+        className="btn-secondary mt-3 !px-3 !py-1.5"
       >
         Copy both
       </button>

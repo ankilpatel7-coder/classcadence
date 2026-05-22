@@ -171,7 +171,7 @@ export function HoursEditor({
                         type="button"
                         onClick={() => removeWindow(day.key, i)}
                         aria-label="Remove window"
-                        className="inline-flex items-center rounded-md border border-line bg-surface p-1.5 text-muted transition hover:text-danger"
+                        className="btn-secondary !p-1.5 text-muted hover:text-danger"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -196,7 +196,7 @@ export function HoursEditor({
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-card transition hover:bg-primary-strong disabled:opacity-60"
+        className="btn-primary"
       >
         {pending ? "Saving…" : "Save hours"}
       </button>

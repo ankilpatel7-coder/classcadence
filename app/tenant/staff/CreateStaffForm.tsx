@@ -24,7 +24,7 @@ function Submit() {
     <button
       type="submit"
       disabled={pending}
-      className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-card transition hover:bg-primary-strong disabled:opacity-60"
+      className="btn-primary"
     >
       {pending ? "Creating…" : "Create staff account"}
     </button>
@@ -101,7 +101,7 @@ export function CreateStaffForm() {
             <button
               type="button"
               onClick={() => setReveal((v) => !v)}
-              className="rounded-md border border-line bg-surface px-3 text-xs text-ink transition hover:bg-bg"
+              className="btn-secondary !px-3 !py-1.5"
             >
               {reveal ? "Hide" : "Show"}
             </button>
@@ -111,7 +111,7 @@ export function CreateStaffForm() {
                 setPassword(generatePassword());
                 setReveal(true);
               }}
-              className="rounded-md border border-line bg-surface px-3 text-xs text-ink transition hover:bg-bg"
+              className="btn-secondary !px-3 !py-1.5"
             >
               Generate
             </button>
@@ -181,7 +181,7 @@ function CredentialsBanner({
       <button
         type="button"
         onClick={copyAll}
-        className="mt-3 rounded-md border border-line bg-surface px-3 py-1.5 text-xs font-medium text-ink transition hover:bg-bg"
+        className="btn-secondary mt-3 !px-3 !py-1.5"
       >
         Copy credentials
       </button>

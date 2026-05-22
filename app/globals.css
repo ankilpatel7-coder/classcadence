@@ -85,9 +85,18 @@ h1 {
       linear-gradient(to bottom, rgba(255, 255, 255, 1), rgba(251, 250, 247, 0.6));
   }
 
-  /* Primary button — emerald embossed look, soft gradient, deeper hover lift */
+  /* Shared button base — every variant inherits identical sizing + radius so
+     the project has one button "shape." Override via Tailwind utility
+     classes (e.g. `!py-1` for tight spots) only when truly needed. */
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition active:translate-y-0 disabled:opacity-60;
+  }
+
+  /* Primary — emerald gradient, embossed, white text */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white shadow-emboss transition active:translate-y-px;
+    @apply text-white shadow-emboss hover:-translate-y-px;
     background-image: linear-gradient(
       180deg,
       #2BC98A 0%,
@@ -100,19 +109,17 @@ h1 {
       0 2px 4px rgba(15, 23, 42, 0.1),
       0 12px 24px -8px rgba(11, 104, 69, 0.35),
       inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  }
-  .btn-primary:disabled {
-    @apply opacity-60;
+    filter: brightness(1.05);
   }
 
-  /* Secondary / ghost button */
+  /* Secondary — soft tint + inset ring, no chunky border */
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-md border border-line bg-surface px-4 py-2 text-sm font-medium text-ink shadow-emboss transition hover:bg-bg active:translate-y-px;
+    @apply bg-bg/70 text-ink ring-1 ring-inset ring-line/70 hover:bg-bg hover:ring-line hover:-translate-y-px;
   }
 
-  /* Danger button (for delete confirmations) */
+  /* Danger — soft red tint + inset ring */
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 rounded-md border border-danger/30 bg-surface px-3 py-1.5 text-xs font-medium text-danger shadow-emboss transition hover:bg-danger/5 active:translate-y-px;
+    @apply bg-danger/10 text-danger ring-1 ring-inset ring-danger/15 hover:bg-danger/15 hover:ring-danger/25 hover:-translate-y-px;
   }
 
   /* Section panel — for the rounded-lg/border/bg-surface/p-6/shadow-card combo

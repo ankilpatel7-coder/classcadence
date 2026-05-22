@@ -19,7 +19,7 @@ function Submit() {
     <button
       type="submit"
       disabled={pending}
-      className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-card transition hover:bg-primary-strong disabled:opacity-60"
+      className="btn-primary"
     >
       {pending ? "Saving…" : "Save changes"}
     </button>

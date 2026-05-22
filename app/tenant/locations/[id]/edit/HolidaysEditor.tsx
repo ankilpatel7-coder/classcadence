@@ -24,7 +24,7 @@ function AddSubmit() {
     <button
       type="submit"
       disabled={pending}
-      className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-card transition hover:bg-primary-strong disabled:opacity-60"
+      className="btn-primary"
     >
       {pending ? "Adding…" : "Add closure"}
     </button>
@@ -40,7 +40,7 @@ function DeleteSubmit({ label }: { label: string }) {
       onClick={(event) => {
         if (!window.confirm(`Remove "${label}"?`)) event.preventDefault();
       }}
-      className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-danger transition hover:bg-danger/5 disabled:opacity-60"
+      className="btn-danger !px-3 !py-1.5"
     >
       <Trash2 className="h-3.5 w-3.5" />
       {pending ? "Removing…" : "Remove"}

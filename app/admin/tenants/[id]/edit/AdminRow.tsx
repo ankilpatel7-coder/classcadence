@@ -23,7 +23,7 @@ function SaveButton() {
     <button
       type="submit"
       disabled={pending}
-      className="rounded-md border border-line bg-surface px-3 py-1.5 text-xs font-medium text-ink transition hover:bg-bg disabled:opacity-60"
+      className="btn-secondary !px-3 !py-1.5"
     >
       {pending ? "Saving…" : "Save name"}
     </button>
@@ -47,7 +47,7 @@ function RemoveButton({ adminEmail }: { adminEmail: string }) {
           event.preventDefault();
         }
       }}
-      className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-danger transition hover:bg-danger/5 disabled:opacity-60"
+      className="btn-danger !px-3 !py-1.5"
     >
       <Trash2 className="h-3.5 w-3.5" />
       {pending ? "Removing…" : "Remove"}

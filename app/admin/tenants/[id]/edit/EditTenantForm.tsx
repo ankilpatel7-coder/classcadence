@@ -39,7 +39,7 @@ function Submit() {
     <button
       type="submit"
       disabled={pending}
-      className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-card transition hover:bg-primary-strong disabled:opacity-60"
+      className="btn-primary"
     >
       {pending ? "Saving…" : "Save changes"}
     </button>
@@ -142,7 +142,7 @@ export function EditTenantForm({ tenant }: { tenant: Tenant }) {
         <Submit />
         <Link
           href="/admin/tenants"
-          className="rounded-md border border-line bg-surface px-4 py-2 text-sm text-ink transition hover:bg-bg"
+          className="btn-secondary"
         >
           Cancel
         </Link>
