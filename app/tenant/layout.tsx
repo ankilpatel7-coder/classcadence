@@ -9,6 +9,7 @@ import { signOutAction } from "@/app/login/actions";
 import { Logo } from "@/app/_components/Logo";
 import { MobileNav } from "@/app/_components/MobileNav";
 import { UserMenu } from "@/app/_components/UserMenu";
+import { NavLinks } from "@/app/_components/NavLinks";
 
 const BASE_NAV_LINKS = [
   { href: "/tenant", label: "Home" },
@@ -81,23 +82,33 @@ export default async function TenantLayout({
       className="min-h-screen"
       style={{ "--color-primary": brandColor } as React.CSSProperties}
     >
-      <header className="relative border-b border-line/70 bg-surface/80 backdrop-blur-md shadow-[0_1px_0_rgba(255,255,255,0.6)_inset,0_8px_24px_-16px_rgba(15,23,42,0.10)]">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 md:px-6 md:py-4">
-          <div className="flex min-w-0 items-center gap-3 md:gap-6">
+      <header className="sticky top-0 z-30 border-b border-line/70 bg-surface/85 backdrop-blur-md shadow-[0_1px_0_rgba(255,255,255,0.7)_inset,0_10px_30px_-18px_rgba(15,23,42,0.18)]">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 md:px-6 md:py-3">
+          {/* Left: logo + tenant chip */}
+          <div className="flex min-w-0 items-center gap-3">
             <Link href="/tenant" className="shrink-0">
               <Logo />
             </Link>
-            <span className="hidden truncate text-sm text-muted md:inline">
-              {tenant?.name ?? "Your center"}
-            </span>
+            {tenant?.name ? (
+              <span
+                className="hidden max-w-[200px] truncate rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide text-white shadow-emboss md:inline-block"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(180deg, #2BC98A 0%, var(--color-primary) 60%, var(--color-primary-strong) 100%)",
+                }}
+                title={tenant.name}
+              >
+                {tenant.name}
+              </span>
+            ) : null}
           </div>
 
-          <nav className="hidden items-center gap-1 md:flex">
-            {navLinks.map((l) => (
-              <NavLink key={l.href} href={l.href} label={l.label} />
-            ))}
-          </nav>
+          {/* Center: nav pills */}
+          <div className="hidden md:block">
+            <NavLinks items={navLinks} />
+          </div>
 
+          {/* Right: user avatar + mobile menu */}
           <div className="flex items-center gap-2 md:gap-3">
             <div className="hidden md:block">
               <UserMenu
@@ -134,16 +145,5 @@ export default async function TenantLayout({
 
       <main className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">{children}</main>
     </div>
-  );
-}
-
-function NavLink({ href, label }: { href: string; label: string }) {
-  return (
-    <Link
-      href={href}
-      className="rounded-md px-3 py-1.5 text-sm font-medium text-muted transition hover:bg-bg hover:text-ink"
-    >
-      {label}
-    </Link>
   );
 }

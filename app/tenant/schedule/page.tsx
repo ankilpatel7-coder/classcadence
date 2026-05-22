@@ -101,7 +101,14 @@ export default async function SchedulePage({
   await getCurrentUserOrRedirect();
 
   // Silent: keep the next 14 days of sessions current on every Schedule load.
-  await materializeSessions(14).catch(() => {});
+  try {
+    const result = await materializeSessions(14);
+    if (result.error) {
+      console.error("[schedule] materializeSessions error:", result.error);
+    }
+  } catch (e) {
+    console.error("[schedule] materializeSessions threw:", e);
+  }
 
   const supabase = createSupabaseServerClient();
 

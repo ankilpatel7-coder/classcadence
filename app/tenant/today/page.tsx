@@ -61,8 +61,16 @@ export default async function TodayPage({
   await getCurrentUserOrRedirect();
 
   // Silent: keep the next 14 days of sessions current on every Today load.
-  // Idempotent + cheap when nothing has changed.
-  await materializeSessions(14).catch(() => {});
+  // Idempotent + cheap when nothing has changed. Errors here surface in
+  // Vercel function logs but don't break the page render.
+  try {
+    const result = await materializeSessions(14);
+    if (result.error) {
+      console.error("[today] materializeSessions error:", result.error);
+    }
+  } catch (e) {
+    console.error("[today] materializeSessions threw:", e);
+  }
 
   const supabase = createSupabaseServerClient();
 
