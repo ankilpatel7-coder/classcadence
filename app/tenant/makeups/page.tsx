@@ -30,7 +30,7 @@ type AbsenceRow = {
 export default async function MakeupsPage({
   searchParams,
 }: {
-  searchParams: { makeup_url?: string; error?: string };
+  searchParams: { makeup_url?: string; error?: string; added?: string };
 }) {
   await getCurrentUserOrRedirect();
   const supabase = createSupabaseServerClient();
@@ -191,6 +191,14 @@ export default async function MakeupsPage({
       {searchParams.error ? (
         <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
           {decodeURIComponent(searchParams.error)}
+        </div>
+      ) : null}
+
+      {searchParams.added ? (
+        <div className="rounded-md border border-success/30 bg-success-soft px-4 py-3 text-sm text-success">
+          Added {searchParams.added} make-up class
+          {searchParams.added === "1" ? "" : "es"}. The student is now expected
+          in those sessions on Today and Schedule.
         </div>
       ) : null}
 

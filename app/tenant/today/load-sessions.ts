@@ -5,6 +5,7 @@ export type LoadedAttendance = {
   status: string;
   check_in_at: string | null;
   check_out_at: string | null;
+  is_makeup: boolean;
   students: { id: string; first_name: string; last_name: string };
   lesson_notes: { body: string; visibility: string; created_at: string }[];
 };
@@ -53,7 +54,9 @@ export async function loadSessionsInWindow(
     supabase.from("time_slots").select("id, classroom_id").in("id", slotIds),
     supabase
       .from("attendance_records")
-      .select("id, session_id, student_id, status, check_in_at, check_out_at")
+      .select(
+        "id, session_id, student_id, status, check_in_at, check_out_at, is_makeup"
+      )
       .in("session_id", sessionIds),
   ]);
   const slotsData = slotsResult.data ?? [];
@@ -177,6 +180,7 @@ export async function loadSessionsInWindow(
       status: a.status as string,
       check_in_at: a.check_in_at as string | null,
       check_out_at: a.check_out_at as string | null,
+      is_makeup: Boolean(a.is_makeup),
       students: student,
       lesson_notes: notesByAttendance.get(a.id as string) ?? [],
     });

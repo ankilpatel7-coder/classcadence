@@ -1,4 +1,4 @@
-import { CalendarDays, CheckCheck, StickyNote } from "lucide-react";
+import { CalendarDays, CheckCheck, Sparkles, StickyNote } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import {
@@ -22,6 +22,7 @@ type AttendanceRow = {
   status: string;
   check_in_at: string | null;
   check_out_at: string | null;
+  is_makeup: boolean;
   students: { id: string; first_name: string; last_name: string };
   lesson_notes: { body: string; visibility: string; created_at: string }[] | null;
 };
@@ -117,6 +118,7 @@ export default async function TodayPage({
     status: string;
     checkInAt: string | null;
     checkOutAt: string | null;
+    isMakeup: boolean;
     notes: { body: string; visibility: string; created_at: string }[];
   };
 
@@ -137,6 +139,7 @@ export default async function TodayPage({
         status: r.status,
         checkInAt: r.check_in_at,
         checkOutAt: r.check_out_at,
+        isMakeup: r.is_makeup,
         notes: r.lesson_notes ?? [],
       }))
     )
@@ -267,8 +270,14 @@ export default async function TodayPage({
                       size={26}
                     />
                     <div>
-                      <p className="text-sm font-medium text-ink">
+                      <p className="flex items-center gap-1.5 text-sm font-medium text-ink">
                         {r.firstName} {r.lastName}
+                        {r.isMakeup ? (
+                          <span className="inline-flex items-center gap-0.5 rounded-full bg-primary-soft px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary-strong">
+                            <Sparkles className="h-2.5 w-2.5" />
+                            Make-up
+                          </span>
+                        ) : null}
                       </p>
                       <p className="text-[10px] text-muted">
                         {formatTimeInTimezone(r.startUtc, r.tz)}–
@@ -328,6 +337,7 @@ function Row({
     status: string;
     checkInAt: string | null;
     checkOutAt: string | null;
+    isMakeup: boolean;
     notes: { body: string; visibility: string; created_at: string }[];
   };
   isFirstOfSession: boolean;
@@ -378,8 +388,14 @@ function Row({
               size={26}
             />
             <div>
-              <p className="text-sm font-medium text-ink">
+              <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-ink">
                 {r.firstName} {r.lastName}
+                {r.isMakeup ? (
+                  <span className="inline-flex items-center gap-0.5 rounded-full bg-primary-soft px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary-strong">
+                    <Sparkles className="h-2.5 w-2.5" />
+                    Make-up
+                  </span>
+                ) : null}
               </p>
               {r.checkInAt ? (
                 <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">

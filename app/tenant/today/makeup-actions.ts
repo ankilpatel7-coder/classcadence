@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { randomBytes, createHash } from "crypto";
+import { z } from "zod";
 import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
@@ -106,6 +107,84 @@ export async function offerMakeupAction(formData: FormData) {
   redirect(
     `/tenant/makeups?makeup_url=${encodeURIComponent(url)}`
   );
+}
+
+// ============ Admin-driven make-up: pick N sessions explicitly ============
+
+const CreateMakeupsSchema = z.object({
+  absent_attendance_id: z.string().uuid(),
+  session_ids: z.array(z.string().uuid()).min(1, "Pick at least one session."),
+});
+
+export async function createMakeupAttendancesAction(formData: FormData) {
+  const user = await getCurrentUserOrRedirect();
+  if (!canOfferMakeup(user.role)) redirect("/tenant/makeups?error=forbidden");
+
+  const absentId = formData.get("absent_attendance_id");
+  const sessionIds = formData.getAll("session_ids").map((v) => String(v));
+
+  const parsed = CreateMakeupsSchema.safeParse({
+    absent_attendance_id: absentId,
+    session_ids: sessionIds,
+  });
+  if (!parsed.success) {
+    redirect(
+      `/tenant/makeups/${absentId}/offer?error=${encodeURIComponent(
+        parsed.error.issues[0]?.message ?? "Pick at least one session."
+      )}`
+    );
+  }
+
+  const supabase = createSupabaseServerClient();
+
+  // Confirm the absent attendance row and grab the student.
+  const { data: absent } = await supabase
+    .from("attendance_records")
+    .select("id, student_id, status")
+    .eq("id", parsed.data.absent_attendance_id)
+    .maybeSingle();
+  if (!absent) redirect("/tenant/makeups?error=not-found");
+
+  const studentId = absent.student_id as string;
+  const rows = parsed.data.session_ids.map((sessionId) => ({
+    session_id: sessionId,
+    student_id: studentId,
+    status: "expected",
+    is_makeup: true,
+  }));
+
+  // Insert (skip duplicates if student happens to already be in a slot's session).
+  const { error: insertError } = await supabase
+    .from("attendance_records")
+    .upsert(rows, {
+      onConflict: "session_id,student_id",
+      ignoreDuplicates: true,
+    });
+  if (insertError) {
+    redirect(
+      `/tenant/makeups/${absent.id}/offer?error=${encodeURIComponent(insertError.message)}`
+    );
+  }
+
+  // Promote the absent record to made_up. made_up_in_session_id points at the
+  // first selected session for traceability — the rest live with is_makeup=true.
+  const { error: updateError } = await supabase
+    .from("attendance_records")
+    .update({
+      status: "made_up",
+      made_up_in_session_id: parsed.data.session_ids[0],
+    })
+    .eq("id", parsed.data.absent_attendance_id);
+  if (updateError) {
+    redirect(
+      `/tenant/makeups/${absent.id}/offer?error=${encodeURIComponent(updateError.message)}`
+    );
+  }
+
+  revalidatePath("/tenant/makeups");
+  revalidatePath("/tenant/today");
+  revalidatePath("/tenant/schedule");
+  redirect(`/tenant/makeups?added=${parsed.data.session_ids.length}`);
 }
 
 // ============ Parent-facing accept/decline (public route) ============
