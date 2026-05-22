@@ -6,7 +6,6 @@ import {
   formatTimeInTimezone,
   localToUtc,
 } from "@/lib/time";
-import { materializeSessions } from "@/app/tenant/today/actions";
 import {
   WeekCalendar,
   type DayColumn,
@@ -98,18 +97,7 @@ export default async function SchedulePage({
 }: {
   searchParams: { start?: string };
 }) {
-  await getCurrentUserOrRedirect();
-
-  // Silent: keep the next 14 days of sessions current on every Schedule load.
-  try {
-    const result = await materializeSessions(14);
-    if (result.error) {
-      console.error("[schedule] materializeSessions error:", result.error);
-    }
-  } catch (e) {
-    console.error("[schedule] materializeSessions threw:", e);
-  }
-
+  const user = await getCurrentUserOrRedirect();
   const supabase = createSupabaseServerClient();
 
   const { data: locations } = await supabase
@@ -156,6 +144,26 @@ export default async function SchedulePage({
   const sessions = ((sessionsData ?? []) as unknown as SessionRow[]).filter(
     (s) => s.status !== "cancelled"
   );
+
+  let diagnosticBareCount: number | null = null;
+  if (sessions.length === 0) {
+    const { count } = await supabase
+      .from("sessions")
+      .select("id", { count: "exact", head: true })
+      .gte("scheduled_start_utc", windowStartUtc)
+      .lte("scheduled_start_utc", windowEndUtc);
+    diagnosticBareCount = count ?? 0;
+    console.log(
+      "[schedule] empty render — tenantId:",
+      user.tenantId,
+      "window:",
+      windowStartUtc,
+      "to",
+      windowEndUtc,
+      "bareSessions:",
+      diagnosticBareCount
+    );
+  }
 
   const allTimes = sessions.flatMap((s) => [
     minutesIntoDay(s.scheduled_start_utc, primaryTz),
@@ -224,13 +232,39 @@ export default async function SchedulePage({
       </div>
 
       {sessions.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-line bg-surface px-6 py-12 text-center">
-          <CalendarRange className="mx-auto h-6 w-6 text-muted" />
-          <p className="mt-3 text-sm text-muted">No classes scheduled this week.</p>
-          <p className="mt-1 text-sm text-muted">
-            Add time slots to a classroom, then enroll students — their weekly
-            classes will fill in here automatically.
-          </p>
+        <div className="space-y-3">
+          <div className="rounded-lg border border-dashed border-line bg-surface px-6 py-12 text-center">
+            <CalendarRange className="mx-auto h-6 w-6 text-muted" />
+            <p className="mt-3 text-sm text-muted">No classes scheduled this week.</p>
+            <p className="mt-1 text-sm text-muted">
+              Add time slots to a classroom, then enroll students — their weekly
+              classes will fill in here automatically.
+            </p>
+          </div>
+          {diagnosticBareCount !== null ? (
+            <details className="rounded-md border border-line bg-bg/40 px-3 py-2 text-xs text-muted">
+              <summary className="cursor-pointer font-medium text-ink">
+                Diagnostics
+              </summary>
+              <dl className="mt-2 space-y-1 font-mono">
+                <div>Tenant: {user.tenantId ?? "(none)"}</div>
+                <div>Window: {windowStartUtc} → {windowEndUtc}</div>
+                <div>Sessions found (bare query): {diagnosticBareCount}</div>
+                {diagnosticBareCount > 0 ? (
+                  <div className="mt-2 text-danger">
+                    Bare count shows {diagnosticBareCount} sessions, but the
+                    embed query returns 0. Likely a tenant-id mismatch on a
+                    joined table.
+                  </div>
+                ) : (
+                  <div className="mt-2">
+                    No sessions exist in this UTC window. Open
+                    /tenant/settings → Force refresh schedule to materialize.
+                  </div>
+                )}
+              </dl>
+            </details>
+          ) : null}
         </div>
       ) : (
         <>
