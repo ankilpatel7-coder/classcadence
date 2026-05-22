@@ -23,6 +23,7 @@ type AttendanceRow = {
   check_in_at: string | null;
   check_out_at: string | null;
   is_makeup: boolean;
+  is_manual: boolean;
   students: { id: string; first_name: string; last_name: string };
   lesson_notes: { body: string; visibility: string; created_at: string }[] | null;
 };
@@ -119,6 +120,7 @@ export default async function TodayPage({
     checkInAt: string | null;
     checkOutAt: string | null;
     isMakeup: boolean;
+    isManual: boolean;
     notes: { body: string; visibility: string; created_at: string }[];
   };
 
@@ -140,6 +142,7 @@ export default async function TodayPage({
         checkInAt: r.check_in_at,
         checkOutAt: r.check_out_at,
         isMakeup: r.is_makeup,
+        isManual: r.is_manual,
         notes: r.lesson_notes ?? [],
       }))
     )
@@ -338,6 +341,7 @@ function Row({
     checkInAt: string | null;
     checkOutAt: string | null;
     isMakeup: boolean;
+    isManual: boolean;
     notes: { body: string; visibility: string; created_at: string }[];
   };
   isFirstOfSession: boolean;
@@ -394,6 +398,12 @@ function Row({
                   <span className="inline-flex items-center gap-0.5 rounded-full bg-primary-soft px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary-strong">
                     <Sparkles className="h-2.5 w-2.5" />
                     Make-up
+                  </span>
+                ) : null}
+                {r.isManual ? (
+                  <span className="inline-flex items-center gap-0.5 rounded-full bg-accent-soft px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-accent">
+                    <Sparkles className="h-2.5 w-2.5" />
+                    Manual
                   </span>
                 ) : null}
               </p>

@@ -1,4 +1,5 @@
-import { Sparkles, X } from "lucide-react";
+import Link from "next/link";
+import { Sparkles, UserPlus, X } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { formatTimeInTimezone } from "@/lib/time";
@@ -30,7 +31,12 @@ type AbsenceRow = {
 export default async function MakeupsPage({
   searchParams,
 }: {
-  searchParams: { makeup_url?: string; error?: string; added?: string };
+  searchParams: {
+    makeup_url?: string;
+    error?: string;
+    added?: string;
+    manual_added?: string;
+  };
 }) {
   await getCurrentUserOrRedirect();
   const supabase = createSupabaseServerClient();
@@ -181,11 +187,24 @@ export default async function MakeupsPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-ink">Make-ups</h1>
-        <p className="mt-1 text-sm text-muted">
-          Offer a make-up class to students who were absent. Past 30 days.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-ink">Make-ups</h1>
+          <p className="mt-1 text-sm text-muted">
+            Offer a make-up class to students who were absent. Past 30 days.
+          </p>
+        </div>
+        <Link
+          href="/tenant/makeups/manual"
+          className="btn-primary w-full sm:w-auto"
+          style={{
+            backgroundImage:
+              "linear-gradient(180deg, #FDBA74 0%, #F97316 60%, #C2410C 100%)",
+          }}
+        >
+          <UserPlus className="h-4 w-4" />
+          Add manual class
+        </Link>
       </div>
 
       {searchParams.error ? (
@@ -199,6 +218,14 @@ export default async function MakeupsPage({
           Added {searchParams.added} make-up class
           {searchParams.added === "1" ? "" : "es"}. The student is now expected
           in those sessions on Today and Schedule.
+        </div>
+      ) : null}
+
+      {searchParams.manual_added ? (
+        <div className="rounded-md border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-ink">
+          Added {searchParams.manual_added} manual class
+          {searchParams.manual_added === "1" ? "" : "es"}. The student now has
+          a &quot;Manual&quot; tag on those sessions in Today and Schedule.
         </div>
       ) : null}
 

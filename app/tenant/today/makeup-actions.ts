@@ -210,6 +210,79 @@ export async function createMakeupAttendancesAction(formData: FormData) {
   redirect(`/tenant/makeups?added=${parsed.data.session_ids.length}`);
 }
 
+// ============ Manual one-time class add (not tied to an absence) ============
+
+const CreateManualSchema = z.object({
+  student_id: z.string().uuid(),
+  session_ids: z.array(z.string().uuid()).min(1, "Pick at least one session."),
+});
+
+export async function createManualAttendancesAction(formData: FormData) {
+  const user = await getCurrentUserOrRedirect();
+  if (!canOfferMakeup(user.role)) redirect("/tenant/makeups?error=forbidden");
+
+  const studentId = formData.get("student_id");
+  const sessionIds = formData.getAll("session_ids").map((v) => String(v));
+
+  const parsed = CreateManualSchema.safeParse({
+    student_id: studentId,
+    session_ids: sessionIds,
+  });
+  if (!parsed.success) {
+    redirect(
+      `/tenant/makeups/manual?error=${encodeURIComponent(
+        parsed.error.issues[0]?.message ?? "Pick at least one session."
+      )}`
+    );
+  }
+
+  const supabase = createSupabaseServerClient();
+  type AttendanceInsert = {
+    session_id: string;
+    student_id: string;
+    status: string;
+    is_manual?: boolean;
+  };
+  const rows: AttendanceInsert[] = parsed.data.session_ids.map((sid) => ({
+    session_id: sid,
+    student_id: parsed.data.student_id,
+    status: "expected",
+    is_manual: true,
+  }));
+
+  // Try with is_manual; fall back if the column doesn't exist yet.
+  let { error: insertError } = await supabase
+    .from("attendance_records")
+    .upsert(rows, {
+      onConflict: "session_id,student_id",
+      ignoreDuplicates: true,
+    });
+  if (insertError && /is_manual/.test(insertError.message)) {
+    const fallback = rows.map((r) => ({
+      session_id: r.session_id,
+      student_id: r.student_id,
+      status: r.status,
+    }));
+    const retry = await supabase
+      .from("attendance_records")
+      .upsert(fallback, {
+        onConflict: "session_id,student_id",
+        ignoreDuplicates: true,
+      });
+    insertError = retry.error;
+  }
+  if (insertError) {
+    redirect(
+      `/tenant/makeups/manual?error=${encodeURIComponent(insertError.message)}`
+    );
+  }
+
+  revalidatePath("/tenant/makeups");
+  revalidatePath("/tenant/today");
+  revalidatePath("/tenant/schedule");
+  redirect(`/tenant/makeups?manual_added=${parsed.data.session_ids.length}`);
+}
+
 // ============ Parent-facing accept/decline (public route) ============
 
 const ACTIONS = ["accept", "decline"] as const;

@@ -6,6 +6,7 @@ export type LoadedAttendance = {
   check_in_at: string | null;
   check_out_at: string | null;
   is_makeup: boolean;
+  is_manual: boolean;
   students: { id: string; first_name: string; last_name: string };
   lesson_notes: { body: string; visibility: string; created_at: string }[];
 };
@@ -179,6 +180,7 @@ export async function loadSessionsInWindow(
       check_in_at: a.check_in_at as string | null,
       check_out_at: a.check_out_at as string | null,
       is_makeup: Boolean((a as { is_makeup?: boolean }).is_makeup),
+      is_manual: Boolean((a as { is_manual?: boolean }).is_manual),
       students: student,
       lesson_notes: notesByAttendance.get(a.id as string) ?? [],
     });
