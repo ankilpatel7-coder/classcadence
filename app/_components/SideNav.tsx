@@ -2,9 +2,33 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  CalendarCheck2,
+  CalendarRange,
+  Cog,
+  GraduationCap,
+  Home,
+  MapPin,
+  Sparkles,
+  Users,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-export type SideNavItem = { href: string; label: string; icon: LucideIcon };
+// Icons referenced by string key so server -> client serialization works.
+// (Function references can't cross the RSC boundary.)
+const ICONS: Record<string, LucideIcon> = {
+  home: Home,
+  today: CalendarCheck2,
+  schedule: CalendarRange,
+  students: GraduationCap,
+  makeups: Sparkles,
+  locations: MapPin,
+  staff: Users,
+  settings: Cog,
+};
+
+export type IconKey = keyof typeof ICONS;
+export type SideNavItem = { href: string; label: string; icon: IconKey };
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/tenant" || href === "/admin/tenants") return pathname === href;
@@ -17,7 +41,7 @@ export function SideNav({ items }: { items: SideNavItem[] }) {
     <nav className="space-y-0.5" aria-label="Primary">
       {items.map((item) => {
         const active = isActive(pathname, item.href);
-        const Icon = item.icon;
+        const Icon = ICONS[item.icon] ?? Home;
         return (
           <Link
             key={item.href}

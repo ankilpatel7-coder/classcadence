@@ -1,16 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  Home,
-  CalendarCheck2,
-  CalendarRange,
-  GraduationCap,
-  MapPin,
-  Sparkles,
-  Users,
-  Cog,
-} from "lucide-react";
-import {
   createSupabaseServerClient,
   createSupabaseServiceClient,
 } from "@/lib/supabase/server";
@@ -22,17 +12,17 @@ import { UserMenu } from "@/app/_components/UserMenu";
 import { SideNav, type SideNavItem } from "@/app/_components/SideNav";
 
 const BASE_NAV: SideNavItem[] = [
-  { href: "/tenant", label: "Home", icon: Home },
-  { href: "/tenant/today", label: "Today", icon: CalendarCheck2 },
-  { href: "/tenant/schedule", label: "Schedule", icon: CalendarRange },
-  { href: "/tenant/students", label: "Students", icon: GraduationCap },
-  { href: "/tenant/makeups", label: "Make-ups", icon: Sparkles },
-  { href: "/tenant/locations", label: "Locations", icon: MapPin },
+  { href: "/tenant", label: "Home", icon: "home" },
+  { href: "/tenant/today", label: "Today", icon: "today" },
+  { href: "/tenant/schedule", label: "Schedule", icon: "schedule" },
+  { href: "/tenant/students", label: "Students", icon: "students" },
+  { href: "/tenant/makeups", label: "Make-ups", icon: "makeups" },
+  { href: "/tenant/locations", label: "Locations", icon: "locations" },
 ];
 
 const ADMIN_NAV: SideNavItem[] = [
-  { href: "/tenant/staff", label: "Staff", icon: Users },
-  { href: "/tenant/settings", label: "Settings", icon: Cog },
+  { href: "/tenant/staff", label: "Staff", icon: "staff" },
+  { href: "/tenant/settings", label: "Settings", icon: "settings" },
 ];
 
 export const metadata = {
