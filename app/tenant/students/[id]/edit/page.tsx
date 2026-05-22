@@ -99,7 +99,7 @@ export default async function EditStudentPage({
       .from("enrollments")
       .select("id, time_slot_id, student_id")
       .in("time_slot_id", slotIds)
-      .or(`effective_to.is.null,effective_to.gte.${today}`);
+      .or(`effective_to.is.null,effective_to.gt.${today}`);
     for (const e of en ?? []) {
       const arr = enrollmentsBySlot.get(e.time_slot_id as string) ?? [];
       arr.push({ id: e.id as string, student_id: e.student_id as string });

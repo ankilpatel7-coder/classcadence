@@ -120,10 +120,9 @@ export async function materializeSessions(days: number) {
     for (const session of upserted ?? []) {
       const sessionDate = (session.scheduled_start_utc as string).slice(0, 10);
       for (const en of enrollments) {
-        if (en.effective_from > latestDate) continue;
-        if (en.effective_to && en.effective_to < earliestDate) continue;
         if (en.effective_from > sessionDate) continue;
-        if (en.effective_to && en.effective_to < sessionDate) continue;
+        // "ended" means effective_to is on or before sessionDate.
+        if (en.effective_to && en.effective_to <= sessionDate) continue;
         attendanceRows.push({ session_id: session.id, student_id: en.student_id });
       }
     }

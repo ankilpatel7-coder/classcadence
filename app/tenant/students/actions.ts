@@ -219,12 +219,13 @@ export async function enrollStudentAction(
   const { data: slot } = await supabase
     .from("time_slots")
     .select(
-      "id, capacity_override, classrooms!inner(id, default_capacity, locations!inner(id, max_classes_per_student_per_week))"
+      "id, weekday, capacity_override, classrooms!inner(id, default_capacity, locations!inner(id, max_classes_per_student_per_week))"
     )
     .eq("id", parsed.data.time_slot_id)
     .maybeSingle();
   type SlotRow = {
     id: string;
+    weekday: string;
     capacity_override: number | null;
     classrooms: {
       id: string;
@@ -235,17 +236,21 @@ export async function enrollStudentAction(
   const slotRow = slot as unknown as SlotRow | null;
   if (!slotRow) return { error: "Slot not found.", success: false };
 
+  const targetWeekday = slotRow.weekday;
   const locId = slotRow.classrooms.locations.id;
   const cap = slotRow.classrooms.locations.max_classes_per_student_per_week;
   const slotCapacity =
     slotRow.capacity_override ?? slotRow.classrooms.default_capacity;
 
-  // 1. Per-slot capacity enforcement.
+  // Strict gt so legacy rows with effective_to=today are treated as ended.
+  const activeFilter = `effective_to.is.null,effective_to.gt.${today}`;
+
+  // 1. Per-slot capacity + already-enrolled check.
   const { data: slotEnrollments } = await supabase
     .from("enrollments")
     .select("id, student_id")
     .eq("time_slot_id", parsed.data.time_slot_id)
-    .or(`effective_to.is.null,effective_to.gte.${today}`);
+    .or(activeFilter);
 
   const currentSlotCount = slotEnrollments?.length ?? 0;
   const alreadyEnrolled = (slotEnrollments ?? []).some(
@@ -264,24 +269,40 @@ export async function enrollStudentAction(
     };
   }
 
-  // 2. Per-location student quota enforcement.
+  // 2. All active enrollments for this student — used for same-day + location quota.
   const { data: existing } = await supabase
     .from("enrollments")
     .select(
-      "id, effective_to, time_slots!inner(classrooms!inner(locations!inner(id)))"
+      "id, effective_to, time_slots!inner(weekday, classrooms!inner(locations!inner(id)))"
     )
     .eq("student_id", parsed.data.student_id)
-    .or(`effective_to.is.null,effective_to.gte.${today}`);
+    .or(activeFilter);
 
   type Existing = {
     id: string;
     effective_to: string | null;
-    time_slots: { classrooms: { locations: { id: string } } };
+    time_slots: { weekday: string; classrooms: { locations: { id: string } } };
   };
-  const existingAtLocation = (
-    (existing ?? []) as unknown as Existing[]
-  ).filter((e) => e.time_slots.classrooms.locations.id === locId);
+  const existingTyped = (existing ?? []) as unknown as Existing[];
 
+  // 2a. One class per weekday rule.
+  const sameDay = existingTyped.find(
+    (e) => e.time_slots.weekday === targetWeekday
+  );
+  if (sameDay) {
+    return {
+      error:
+        `This student already has a class on ` +
+        `${targetWeekday.toUpperCase()}. Each student can only attend one ` +
+        `class per day — remove the existing one to switch.`,
+      success: false,
+    };
+  }
+
+  // 2b. Per-location class quota.
+  const existingAtLocation = existingTyped.filter(
+    (e) => e.time_slots.classrooms.locations.id === locId
+  );
   if (existingAtLocation.length >= cap) {
     return {
       error:
@@ -313,17 +334,47 @@ export async function endEnrollmentAction(formData: FormData) {
     redirect("/tenant/students?error=invalid-id");
   }
 
-  const today = new Date().toISOString().slice(0, 10);
   const supabase = createSupabaseServerClient();
-  const { error } = await supabase
+
+  // 1. Look up the time slot for downstream cleanup before deleting.
+  const { data: en } = await supabase
     .from("enrollments")
-    .update({ effective_to: today })
-    .eq("id", id);
+    .select("time_slot_id")
+    .eq("id", id)
+    .maybeSingle();
+  const slotId = (en?.time_slot_id as string | undefined) ?? null;
+
+  // 2. Hard-delete the enrollment. Past attendance survives (it's the audit
+  //    trail of what happened). Future "expected" rows we clean up below.
+  const { error } = await supabase.from("enrollments").delete().eq("id", id);
   if (error) {
     redirect(
       `/tenant/students/${studentId}/edit?error=${encodeURIComponent(error.message)}`
     );
   }
+
+  // 3. Clean up upcoming "expected" attendance for this student + slot so the
+  //    student doesn't keep showing on Today / Schedule for future weeks.
+  if (slotId) {
+    const nowIso = new Date().toISOString();
+    const { data: futureSessions } = await supabase
+      .from("sessions")
+      .select("id")
+      .eq("time_slot_id", slotId)
+      .gte("scheduled_start_utc", nowIso);
+    const sessionIds = (futureSessions ?? []).map((s) => s.id as string);
+    if (sessionIds.length > 0) {
+      await supabase
+        .from("attendance_records")
+        .delete()
+        .eq("status", "expected")
+        .eq("student_id", studentId)
+        .in("session_id", sessionIds);
+    }
+  }
+
   revalidatePath(`/tenant/students/${studentId}/edit`);
+  revalidatePath("/tenant/today");
+  revalidatePath("/tenant/schedule");
   redirect(`/tenant/students/${studentId}/edit?ended=1`);
 }
