@@ -50,14 +50,12 @@ export async function loadSessionsInWindow(
   const sessionIds = rawSessions.map((s) => s.id as string);
 
   // Wave 1: slots + attendance can run in parallel — both only need sessionIds / slotIds.
+  // attendance_records uses select("*") so the query stays valid even if the
+  // is_makeup column hasn't been added to the DB yet (the field is just absent
+  // and treated as false by the consumer).
   const [slotsResult, attendanceResult] = await Promise.all([
     supabase.from("time_slots").select("id, classroom_id").in("id", slotIds),
-    supabase
-      .from("attendance_records")
-      .select(
-        "id, session_id, student_id, status, check_in_at, check_out_at, is_makeup"
-      )
-      .in("session_id", sessionIds),
+    supabase.from("attendance_records").select("*").in("session_id", sessionIds),
   ]);
   const slotsData = slotsResult.data ?? [];
   const attendanceData = attendanceResult.data ?? [];
@@ -180,7 +178,7 @@ export async function loadSessionsInWindow(
       status: a.status as string,
       check_in_at: a.check_in_at as string | null,
       check_out_at: a.check_out_at as string | null,
-      is_makeup: Boolean(a.is_makeup),
+      is_makeup: Boolean((a as { is_makeup?: boolean }).is_makeup),
       students: student,
       lesson_notes: notesByAttendance.get(a.id as string) ?? [],
     });
