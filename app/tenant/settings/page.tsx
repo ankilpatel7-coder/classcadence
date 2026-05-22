@@ -2,7 +2,6 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import {
   DatabaseLink,
-  MaterializeButton,
   SeedDemoButton,
   WipeAllButton,
   WipeDemoButton,
@@ -97,30 +96,19 @@ export default async function SettingsPage({
 
       {seededHouseholds ? (
         <Flash kind="success">
-          Demo data seeded: {searchParams.seeded_households} households,{" "}
-          {searchParams.seeded_students} students,{" "}
-          {searchParams.seeded_enrollments} enrollments,{" "}
-          {searchParams.materialized_sessions} sessions,{" "}
-          {searchParams.materialized_attendance} attendance rows.
+          Demo data seeded: {searchParams.seeded_students} students enrolled
+          across your time slots.
         </Flash>
       ) : null}
       {searchParams.wiped_households ? (
         <Flash kind="success">
-          Demo data wiped: {searchParams.wiped_households} households,{" "}
-          {searchParams.wiped_students} students.
+          Demo data wiped: {searchParams.wiped_students} students.
         </Flash>
       ) : null}
       {wipedAll ? (
         <Flash kind="success">
-          All students and households deleted for this tenant. Locations,
-          classrooms, and time slots are preserved.
-        </Flash>
-      ) : null}
-      {searchParams.materialized_sessions && !seededHouseholds ? (
-        <Flash kind="success">
-          Materialized {searchParams.materialized_sessions} sessions and{" "}
-          {searchParams.materialized_attendance} attendance rows for the next
-          14 days.
+          All students deleted for this tenant. Locations, classrooms, and time
+          slots are preserved.
         </Flash>
       ) : null}
       {searchParams.error ? (
@@ -143,16 +131,6 @@ export default async function SettingsPage({
         <p className="mt-3 text-xs text-muted">
           Total rows tracked here: <span className="font-mono">{totalRows}</span>.
         </p>
-      </Card>
-
-      <Card title="Operations">
-        <p className="mb-4 text-xs text-muted">
-          Materialization turns your weekly time slots + enrollments into
-          concrete sessions for the next 14 days. Run it after adding new time
-          slots or enrollments. (Eventually this runs on a schedule via
-          Inngest.)
-        </p>
-        <MaterializeButton />
       </Card>
 
       <Card title="Branding">

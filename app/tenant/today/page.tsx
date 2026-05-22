@@ -9,7 +9,7 @@ import {
 import { CheckCheck } from "lucide-react";
 import { AttendanceRowActions } from "./AttendanceRowActions";
 import { TodayCalendar, type CalendarSession } from "./TodayCalendar";
-import { checkInAllExpectedAction } from "./actions";
+import { checkInAllExpectedAction, materializeSessions } from "./actions";
 
 export const metadata = { title: "Today — ClassCadence" };
 export const dynamic = "force-dynamic";
@@ -59,6 +59,11 @@ export default async function TodayPage({
   searchParams: { error?: string; makeup_url?: string };
 }) {
   await getCurrentUserOrRedirect();
+
+  // Silent: keep the next 14 days of sessions current on every Today load.
+  // Idempotent + cheap when nothing has changed.
+  await materializeSessions(14).catch(() => {});
+
   const supabase = createSupabaseServerClient();
 
   const { data: locations } = await supabase
@@ -183,10 +188,10 @@ export default async function TodayPage({
       {sessions.length === 0 ? (
         <div className="rounded-lg border border-dashed border-line bg-surface px-6 py-12 text-center">
           <CalendarDays className="mx-auto h-6 w-6 text-muted" />
-          <p className="mt-3 text-sm text-muted">No sessions scheduled today.</p>
+          <p className="mt-3 text-sm text-muted">No classes scheduled today.</p>
           <p className="mt-1 text-sm text-muted">
-            Materialize sessions on the Settings page if you&apos;ve recently added
-            time slots or enrollments.
+            Add time slots to a classroom, then enroll students — they&apos;ll
+            show up here on their day automatically.
           </p>
         </div>
       ) : (

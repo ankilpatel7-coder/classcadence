@@ -6,6 +6,7 @@ import {
   formatTimeInTimezone,
   localToUtc,
 } from "@/lib/time";
+import { materializeSessions } from "@/app/tenant/today/actions";
 import {
   WeekCalendar,
   type DayColumn,
@@ -98,6 +99,10 @@ export default async function SchedulePage({
   searchParams: { start?: string };
 }) {
   await getCurrentUserOrRedirect();
+
+  // Silent: keep the next 14 days of sessions current on every Schedule load.
+  await materializeSessions(14).catch(() => {});
+
   const supabase = createSupabaseServerClient();
 
   const { data: locations } = await supabase
@@ -214,16 +219,10 @@ export default async function SchedulePage({
       {sessions.length === 0 ? (
         <div className="rounded-lg border border-dashed border-line bg-surface px-6 py-12 text-center">
           <CalendarRange className="mx-auto h-6 w-6 text-muted" />
-          <p className="mt-3 text-sm text-muted">No sessions scheduled this week.</p>
+          <p className="mt-3 text-sm text-muted">No classes scheduled this week.</p>
           <p className="mt-1 text-sm text-muted">
-            If you&apos;ve added new time slots or enrollments recently, run
-            <Link
-              href="/tenant/settings"
-              className="ml-1 text-primary underline-offset-2 hover:underline"
-            >
-              Materialize 14 days
-            </Link>{" "}
-            on the Settings page.
+            Add time slots to a classroom, then enroll students — their weekly
+            classes will fill in here automatically.
           </p>
         </div>
       ) : (

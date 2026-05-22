@@ -3,7 +3,6 @@
 import { useFormStatus } from "react-dom";
 import {
   Database,
-  RefreshCcw,
   Sparkles,
   Trash2,
   AlertTriangle,
@@ -13,7 +12,6 @@ import {
   wipeAllTenantDataAction,
   wipeDemoDataAction,
 } from "./actions";
-import { materializeSessionsAction } from "@/app/tenant/today/actions";
 
 function PendingButton({
   label,
@@ -41,19 +39,6 @@ function PendingButton({
       <Icon className="h-4 w-4" />
       {pending ? pendingLabel : label}
     </button>
-  );
-}
-
-export function MaterializeButton() {
-  return (
-    <form action={materializeSessionsAction}>
-      <PendingButton
-        label="Materialize 14 days"
-        pendingLabel="Materializing…"
-        icon={RefreshCcw}
-        className="bg-primary text-white shadow-card hover:bg-primary-strong"
-      />
-    </form>
   );
 }
 
