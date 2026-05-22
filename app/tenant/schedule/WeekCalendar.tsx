@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { formatTimeInTimezone } from "@/lib/time";
+import { AvatarStack } from "@/app/_components/StudentAvatar";
 
 export type ScheduleSession = {
   id: string;
@@ -13,6 +14,7 @@ export type ScheduleSession = {
   classroomColor: string;
   locationName: string;
   expectedCount: number;
+  studentNames: string[];
   dayKey: string; // YYYY-MM-DD in the location tz
 };
 
@@ -144,16 +146,24 @@ export function WeekCalendar({
                       opacity: hoveredId && hoveredId !== s.id ? 0.7 : 1,
                     }}
                   >
-                    <div className="px-2 py-1">
+                    <div className="px-2 py-1.5">
                       <p className="truncate text-[11px] font-semibold tabular-nums text-ink">
                         {formatTimeInTimezone(s.startUtc, s.tz)}
                       </p>
                       <p className="truncate text-[10px] text-muted">
                         {s.classroomName}
                       </p>
-                      <p className="truncate text-[10px] text-muted">
-                        {s.expectedCount} expected
-                      </p>
+                      {s.studentNames.length > 0 ? (
+                        <div className="mt-1">
+                          <AvatarStack
+                            names={s.studentNames}
+                            size={18}
+                            max={3}
+                          />
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-[10px] text-muted">No students</p>
+                      )}
                     </div>
                   </div>
                 );

@@ -8,6 +8,7 @@ import { AttendanceRowActions } from "./AttendanceRowActions";
 import { checkInAllExpectedAction } from "./actions";
 import { LessonNoteWidget, type ExistingNote } from "./LessonNoteWidget";
 import { OfferMakeupButton } from "./OfferMakeupButton";
+import { AvatarStack, StudentAvatar } from "@/app/_components/StudentAvatar";
 
 export type AttendanceRow = {
   id: string;
@@ -129,10 +130,19 @@ export function TodayCalendar({
                       <span className="text-muted">{s.classroomName}</span>
                     </p>
                     <p className="mt-0.5 truncate text-[10px] text-muted">
-                      {s.locationName} · {s.records.length} expected
+                      {s.locationName}
                     </p>
                   </div>
-                  <CountsPill counts={counts} />
+                  <div className="flex shrink-0 items-center gap-2">
+                    <AvatarStack
+                      names={s.records.map(
+                        (r) => `${r.student.first_name} ${r.student.last_name}`
+                      )}
+                      size={22}
+                      max={4}
+                    />
+                    <CountsPill counts={counts} />
+                  </div>
                 </button>
 
                 {expanded ? (
@@ -158,31 +168,37 @@ export function TodayCalendar({
                           {s.records.map((r) => (
                           <li
                             key={r.id}
-                            className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+                            className="flex flex-wrap items-center justify-between gap-3 px-3 py-2"
                           >
-                            <div>
-                              <p className="text-sm font-medium text-ink">
-                                {r.student.first_name} {r.student.last_name}
-                              </p>
-                              <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-muted">
-                                <span
-                                  className={`rounded-full px-2 py-0.5 font-medium ${
-                                    STATUS_BADGE[r.status] ?? "bg-line text-muted"
-                                  }`}
-                                >
-                                  {r.status}
-                                </span>
-                                {r.check_in_at ? (
-                                  <span>
-                                    In {formatTimeInTimezone(r.check_in_at, s.tz)}
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <StudentAvatar
+                                name={`${r.student.first_name} ${r.student.last_name}`}
+                                size={28}
+                              />
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-ink">
+                                  {r.student.first_name} {r.student.last_name}
+                                </p>
+                                <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-muted">
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 font-medium ${
+                                      STATUS_BADGE[r.status] ?? "bg-line text-muted"
+                                    }`}
+                                  >
+                                    {r.status}
                                   </span>
-                                ) : null}
-                                {r.check_out_at ? (
-                                  <span>
-                                    Out {formatTimeInTimezone(r.check_out_at, s.tz)}
-                                  </span>
-                                ) : null}
-                              </p>
+                                  {r.check_in_at ? (
+                                    <span>
+                                      In {formatTimeInTimezone(r.check_in_at, s.tz)}
+                                    </span>
+                                  ) : null}
+                                  {r.check_out_at ? (
+                                    <span>
+                                      Out {formatTimeInTimezone(r.check_out_at, s.tz)}
+                                    </span>
+                                  ) : null}
+                                </p>
+                              </div>
                             </div>
                             <AttendanceRowActions
                               attendanceId={r.id}

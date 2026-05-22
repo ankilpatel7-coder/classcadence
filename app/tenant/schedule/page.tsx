@@ -16,21 +16,6 @@ import { loadSessionsInWindow } from "@/app/tenant/today/load-sessions";
 export const metadata = { title: "Schedule — ClassCadence" };
 export const dynamic = "force-dynamic";
 
-type SessionRow = {
-  id: string;
-  scheduled_start_utc: string;
-  scheduled_end_utc: string;
-  status: string;
-  time_slots: {
-    classrooms: {
-      name: string;
-      color: string;
-      locations: { id: string; name: string; iana_timezone: string };
-    };
-  };
-  attendance_records: { id: string }[];
-};
-
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_LABELS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -124,21 +109,7 @@ export default async function SchedulePage({
   const windowEndUtc = localToUtc(lastDay, "23:59", primaryTz).toISOString();
 
   const loaded = await loadSessionsInWindow(windowStartUtc, windowEndUtc);
-  // Re-shape into the SessionRow shape this file expects.
-  const sessions: SessionRow[] = loaded.map((s) => ({
-    id: s.id,
-    scheduled_start_utc: s.scheduled_start_utc,
-    scheduled_end_utc: s.scheduled_end_utc,
-    status: s.status,
-    time_slots: {
-      classrooms: {
-        name: s.time_slots.classrooms.name,
-        color: s.time_slots.classrooms.color,
-        locations: s.time_slots.classrooms.locations,
-      },
-    },
-    attendance_records: s.attendance_records.map((a) => ({ id: a.id })),
-  }));
+  const sessions = loaded;
 
   let diagnosticBareCount: number | null = null;
   if (sessions.length === 0) {
@@ -184,6 +155,10 @@ export default async function SchedulePage({
       classroomColor: s.time_slots.classrooms.color,
       locationName: s.time_slots.classrooms.locations.name,
       expectedCount: s.attendance_records?.length ?? 0,
+      studentNames: (s.attendance_records ?? []).map(
+        (a) =>
+          `${a.students.first_name ?? ""} ${a.students.last_name ?? ""}`.trim()
+      ),
       dayKey: dateKey(new Date(s.scheduled_start_utc), tz),
     };
   });
