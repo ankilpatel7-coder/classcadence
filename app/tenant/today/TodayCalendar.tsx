@@ -8,7 +8,8 @@ import { AttendanceRowActions } from "./AttendanceRowActions";
 import { checkInAllExpectedAction } from "./actions";
 import { LessonNoteWidget, type ExistingNote } from "./LessonNoteWidget";
 import { OfferMakeupButton } from "./OfferMakeupButton";
-import { AvatarStack, StudentAvatar } from "@/app/_components/StudentAvatar";
+import { StudentAvatar } from "@/app/_components/StudentAvatar";
+import { CountBadge } from "@/app/_components/CountBadge";
 
 export type AttendanceRow = {
   id: string;
@@ -39,7 +40,7 @@ const STATUS_BADGE: Record<string, string> = {
   made_up: "bg-primary-soft text-primary-strong",
 };
 
-const ROW_PX = 32; // height per 30-min row in the calendar grid
+const ROW_PX = 40; // height per 30-min row in the calendar grid
 const HEADER_PX = 8;
 
 function minutesIntoDay(utc: string, tz: string): number {
@@ -121,28 +122,21 @@ export function TodayCalendar({
                 <button
                   type="button"
                   onClick={() => setExpandedId(expanded ? null : s.id)}
-                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition hover:bg-bg/60"
+                  className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition hover:bg-bg/60"
                 >
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-semibold tabular-nums text-ink">
-                      {formatTimeInTimezone(s.startUtc, s.tz)}–
-                      {formatTimeInTimezone(s.endUtc, s.tz)} ·{" "}
-                      <span className="text-muted">{s.classroomName}</span>
-                    </p>
-                    <p className="mt-0.5 truncate text-[10px] text-muted">
-                      {s.locationName}
-                    </p>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <CountBadge count={s.records.length} color={s.classroomColor} />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold tabular-nums text-ink">
+                        {formatTimeInTimezone(s.startUtc, s.tz)}–
+                        {formatTimeInTimezone(s.endUtc, s.tz)}
+                      </p>
+                      <p className="truncate text-[11px] text-muted">
+                        {s.classroomName} · {s.locationName}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <AvatarStack
-                      names={s.records.map(
-                        (r) => `${r.student.first_name} ${r.student.last_name}`
-                      )}
-                      size={22}
-                      max={4}
-                    />
-                    <CountsPill counts={counts} />
-                  </div>
+                  <CountsPill counts={counts} />
                 </button>
 
                 {expanded ? (

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { formatTimeInTimezone } from "@/lib/time";
+import { CountBadge } from "@/app/_components/CountBadge";
 
 export type ScheduleSession = {
   id: string;
@@ -184,18 +185,3 @@ function fmt(t: number) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-function CountBadge({ count, color }: { count: number; color: string }) {
-  return (
-    <span
-      className="inline-flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full text-base font-bold text-white shadow-emboss ring-2 ring-surface tabular-nums"
-      style={{
-        backgroundImage: `radial-gradient(circle at 30% 25%, rgba(255,255,255,0.32), transparent 55%), linear-gradient(135deg, ${color}, ${color})`,
-        backgroundColor: color,
-      }}
-      title={`${count} student${count === 1 ? "" : "s"}`}
-      aria-label={`${count} students enrolled`}
-    >
-      {count}
-    </span>
-  );
-}
