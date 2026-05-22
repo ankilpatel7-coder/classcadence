@@ -174,6 +174,12 @@ export async function loadSessionsInWindow(
     const location = locationMap.get(classroom.location_id);
     if (!location) continue;
 
+    const records = attendanceBySession.get(s.id as string) ?? [];
+    // Skip empty sessions — Today and Schedule only show classes with at
+    // least one enrolled student. Empty slots clutter the view without
+    // adding info.
+    if (records.length === 0) continue;
+
     out.push({
       id: s.id as string,
       scheduled_start_utc: s.scheduled_start_utc as string,
@@ -186,7 +192,7 @@ export async function loadSessionsInWindow(
           locations: location,
         },
       },
-      attendance_records: attendanceBySession.get(s.id as string) ?? [],
+      attendance_records: records,
     });
   }
   return out;
