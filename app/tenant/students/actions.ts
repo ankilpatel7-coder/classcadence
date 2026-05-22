@@ -341,7 +341,9 @@ export async function enrollStudentAction(
   });
   if (error) return { error: error.message, success: false };
 
-  await materializeSessions(14).catch(() => {});
+  // Targeted materialize — only the slot this student just enrolled into,
+  // not every slot in the tenant. Fast.
+  await materializeSessions(14, [parsed.data.time_slot_id]).catch(() => {});
 
   // Immediate UI update: re-render the edit page so Current Classes picks
   // up the new enrollment without waiting for the next navigation.

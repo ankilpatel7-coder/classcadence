@@ -305,7 +305,9 @@ export async function saveTimeSlotsAction(
     }
   }
 
-  // 2. Insert new cells.
+  // 2. Insert new cells. Capture the inserted IDs so we can materialize
+  //    only the slots that actually changed.
+  let insertedSlotIds: string[] = [];
   if (parsed.data.added_cells.length > 0) {
     const inserts = parsed.data.added_cells.map((s) => ({
       classroom_id: parsed.data.classroom_id,
@@ -313,15 +315,19 @@ export async function saveTimeSlotsAction(
       start_time: s.start_time,
       end_time: s.end_time,
     }));
-    const { error } = await supabase.from("time_slots").insert(inserts);
+    const { data: inserted, error } = await supabase
+      .from("time_slots")
+      .insert(inserts)
+      .select("id");
     if (error) return { error: error.message, success: false };
+    insertedSlotIds = (inserted ?? []).map((r) => r.id as string);
   }
 
-  // Auto-materialize so the new slots immediately show up on Today/Schedule
-  // (and so anyone already enrolled in them gets their attendance rows).
-  if (parsed.data.added_cells.length > 0) {
-    await materializeSessions(14).catch(() => {
-      /* best-effort; manual button in Settings covers gaps */
+  // Auto-materialize the just-inserted slots so they appear on Today/Schedule
+  // immediately. Targeted by slot id — no full-tenant scan.
+  if (insertedSlotIds.length > 0) {
+    await materializeSessions(14, insertedSlotIds).catch(() => {
+      /* best-effort; Force refresh button on Settings covers gaps */
     });
   }
 

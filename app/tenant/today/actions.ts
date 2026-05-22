@@ -60,21 +60,30 @@ export async function materializeSessionsAction(_formData: FormData) {
   redirect(`/tenant/settings?${params.toString()}`);
 }
 
-export async function materializeSessions(days: number) {
+export async function materializeSessions(
+  days: number,
+  slotIds?: string[]
+) {
   // Materialization is a system operation: it creates `sessions` and
   // `attendance_records` rows derived from enrollments. The sessions table
   // intentionally has no user-write RLS policy, so this runs with the
   // service-role client (same as the Inngest cron path).
+  // Pass slotIds to limit the work to specific slots (enroll / slot save);
+  // omit to materialize everything (manual Force refresh, daily cron).
   const supabase = createSupabaseServiceClient();
   const now = new Date();
   const until = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
 
-  const { data: slots, error: slotsError } = await supabase
+  let query = supabase
     .from("time_slots")
     .select(
       "id, weekday, start_time, end_time, status, classrooms!inner(status, locations!inner(id, iana_timezone, status))"
     )
     .eq("status", "active");
+  if (slotIds && slotIds.length > 0) {
+    query = query.in("id", slotIds);
+  }
+  const { data: slots, error: slotsError } = await query;
   if (slotsError) return { sessionsInserted: 0, attendanceInserted: 0, error: slotsError.message };
 
   const activeSlots = ((slots ?? []) as unknown as TimeSlotRow[]).filter(

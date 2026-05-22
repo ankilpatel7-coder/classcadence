@@ -48,29 +48,62 @@ export async function loadSessionsInWindow(
   );
   const sessionIds = rawSessions.map((s) => s.id as string);
 
-  const { data: slotsData } = await supabase
-    .from("time_slots")
-    .select("id, classroom_id")
-    .in("id", slotIds);
+  // Wave 1: slots + attendance can run in parallel — both only need sessionIds / slotIds.
+  const [slotsResult, attendanceResult] = await Promise.all([
+    supabase.from("time_slots").select("id, classroom_id").in("id", slotIds),
+    supabase
+      .from("attendance_records")
+      .select("id, session_id, student_id, status, check_in_at, check_out_at")
+      .in("session_id", sessionIds),
+  ]);
+  const slotsData = slotsResult.data ?? [];
+  const attendanceData = attendanceResult.data ?? [];
+
   const slotMap = new Map<string, { classroom_id: string }>(
-    (slotsData ?? []).map((s) => [
+    slotsData.map((s) => [
       s.id as string,
       { classroom_id: s.classroom_id as string },
     ])
   );
 
   const classroomIds = uniq(
-    (slotsData ?? []).map((s) => s.classroom_id as string).filter(Boolean)
+    slotsData.map((s) => s.classroom_id as string).filter(Boolean)
   );
-  const { data: classroomsData } = await supabase
-    .from("classrooms")
-    .select("id, name, color, location_id")
-    .in("id", classroomIds);
+  const studentIds = uniq(
+    attendanceData.map((a) => a.student_id as string).filter(Boolean)
+  );
+  const attendanceIds = attendanceData.map((a) => a.id as string);
+
+  // Wave 2: classrooms + students + notes all in parallel.
+  const [classroomsResult, studentsResult, notesResult] = await Promise.all([
+    classroomIds.length > 0
+      ? supabase
+          .from("classrooms")
+          .select("id, name, color, location_id")
+          .in("id", classroomIds)
+      : Promise.resolve({ data: [] as { id: string; name: string; color: string; location_id: string }[] }),
+    studentIds.length > 0
+      ? supabase
+          .from("students")
+          .select("id, first_name, last_name")
+          .in("id", studentIds)
+      : Promise.resolve({ data: [] as { id: string; first_name: string; last_name: string }[] }),
+    attendanceIds.length > 0
+      ? supabase
+          .from("lesson_notes")
+          .select("attendance_record_id, body, visibility, created_at")
+          .in("attendance_record_id", attendanceIds)
+      : Promise.resolve({ data: [] as { attendance_record_id: string; body: string; visibility: string; created_at: string }[] }),
+  ]);
+  const classroomsData = classroomsResult.data ?? [];
+  const studentsData = studentsResult.data ?? [];
+  const notesData = notesResult.data ?? [];
+
   const classroomMap = new Map<
     string,
     { name: string; color: string; location_id: string }
   >(
-    (classroomsData ?? []).map((c) => [
+    classroomsData.map((c) => [
       c.id as string,
       {
         name: c.name as string,
@@ -80,13 +113,17 @@ export async function loadSessionsInWindow(
     ])
   );
 
+  // Wave 3: locations (needs classroomsData to know which to fetch).
   const locationIds = uniq(
-    (classroomsData ?? []).map((c) => c.location_id as string).filter(Boolean)
+    classroomsData.map((c) => c.location_id as string).filter(Boolean)
   );
-  const { data: locationsData } = await supabase
-    .from("locations")
-    .select("id, name, iana_timezone")
-    .in("id", locationIds);
+  const { data: locationsData } =
+    locationIds.length > 0
+      ? await supabase
+          .from("locations")
+          .select("id, name, iana_timezone")
+          .in("id", locationIds)
+      : { data: [] };
   const locationMap = new Map<
     string,
     { id: string; name: string; iana_timezone: string }
@@ -101,23 +138,11 @@ export async function loadSessionsInWindow(
     ])
   );
 
-  const { data: attendanceData } = await supabase
-    .from("attendance_records")
-    .select("id, session_id, student_id, status, check_in_at, check_out_at")
-    .in("session_id", sessionIds);
-
-  const studentIds = uniq(
-    (attendanceData ?? []).map((a) => a.student_id as string).filter(Boolean)
-  );
-  const { data: studentsData } = await supabase
-    .from("students")
-    .select("id, first_name, last_name")
-    .in("id", studentIds);
   const studentMap = new Map<
     string,
     { id: string; first_name: string; last_name: string }
   >(
-    (studentsData ?? []).map((s) => [
+    studentsData.map((s) => [
       s.id as string,
       {
         id: s.id as string,
@@ -127,26 +152,19 @@ export async function loadSessionsInWindow(
     ])
   );
 
-  const attendanceIds = (attendanceData ?? []).map((a) => a.id as string);
-  let notesByAttendance = new Map<
+  const notesByAttendance = new Map<
     string,
     { body: string; visibility: string; created_at: string }[]
   >();
-  if (attendanceIds.length > 0) {
-    const { data: notesData } = await supabase
-      .from("lesson_notes")
-      .select("attendance_record_id, body, visibility, created_at")
-      .in("attendance_record_id", attendanceIds);
-    for (const n of notesData ?? []) {
-      const id = n.attendance_record_id as string;
-      const arr = notesByAttendance.get(id) ?? [];
-      arr.push({
-        body: n.body as string,
-        visibility: n.visibility as string,
-        created_at: n.created_at as string,
-      });
-      notesByAttendance.set(id, arr);
-    }
+  for (const n of notesData) {
+    const id = n.attendance_record_id as string;
+    const arr = notesByAttendance.get(id) ?? [];
+    arr.push({
+      body: n.body as string,
+      visibility: n.visibility as string,
+      created_at: n.created_at as string,
+    });
+    notesByAttendance.set(id, arr);
   }
 
   const attendanceBySession = new Map<string, LoadedAttendance[]>();
