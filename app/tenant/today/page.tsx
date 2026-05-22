@@ -10,33 +10,12 @@ import { CheckCheck } from "lucide-react";
 import { AttendanceRowActions } from "./AttendanceRowActions";
 import { TodayCalendar, type CalendarSession } from "./TodayCalendar";
 import { checkInAllExpectedAction } from "./actions";
+import { loadSessionsInWindow, type LoadedSession } from "./load-sessions";
 
 export const metadata = { title: "Today — ClassCadence" };
 export const dynamic = "force-dynamic";
 
-type AttendanceRow = {
-  id: string;
-  status: string;
-  check_in_at: string | null;
-  check_out_at: string | null;
-  students: { id: string; first_name: string; last_name: string };
-  lesson_notes: { body: string; visibility: string; created_at: string }[] | null;
-};
-
-type SessionRow = {
-  id: string;
-  scheduled_start_utc: string;
-  scheduled_end_utc: string;
-  status: string;
-  time_slots: {
-    classrooms: {
-      name: string;
-      color: string;
-      locations: { id: string; name: string; iana_timezone: string };
-    };
-  };
-  attendance_records: AttendanceRow[];
-};
+type SessionRow = LoadedSession;
 
 const STATUS_BADGE: Record<string, string> = {
   expected: "bg-line text-muted",
@@ -74,32 +53,7 @@ export default async function TodayPage({
   const startUtc = localToUtc(today, "00:00", primaryTz).toISOString();
   const endUtc = localToUtc(today, "23:59", primaryTz).toISOString();
 
-  const { data: sessionsData } = await supabase
-    .from("sessions")
-    .select(
-      `id,
-       scheduled_start_utc,
-       scheduled_end_utc,
-       status,
-       time_slots!inner(
-         classrooms!inner(
-           name, color,
-           locations!inner(id, name, iana_timezone)
-         )
-       ),
-       attendance_records(
-         id, status, check_in_at, check_out_at,
-         students!inner(id, first_name, last_name),
-         lesson_notes(body, visibility, created_at)
-       )`
-    )
-    .gte("scheduled_start_utc", startUtc)
-    .lte("scheduled_start_utc", endUtc)
-    .order("scheduled_start_utc", { ascending: true });
-
-  const sessions = ((sessionsData ?? []) as unknown as SessionRow[]).filter(
-    (s) => s.status !== "cancelled"
-  );
+  const sessions: SessionRow[] = await loadSessionsInWindow(startUtc, endUtc);
 
   // If nothing renders, ask Postgres directly so we can show diagnostics.
   let diagnosticBareCount: number | null = null;

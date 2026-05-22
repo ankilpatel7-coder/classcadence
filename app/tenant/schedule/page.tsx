@@ -11,6 +11,7 @@ import {
   type DayColumn,
   type ScheduleSession,
 } from "./WeekCalendar";
+import { loadSessionsInWindow } from "@/app/tenant/today/load-sessions";
 
 export const metadata = { title: "Schedule — ClassCadence" };
 export const dynamic = "force-dynamic";
@@ -122,28 +123,22 @@ export default async function SchedulePage({
   const windowStartUtc = localToUtc(start, "00:00", primaryTz).toISOString();
   const windowEndUtc = localToUtc(lastDay, "23:59", primaryTz).toISOString();
 
-  const { data: sessionsData } = await supabase
-    .from("sessions")
-    .select(
-      `id,
-       scheduled_start_utc,
-       scheduled_end_utc,
-       status,
-       time_slots!inner(
-         classrooms!inner(
-           name, color,
-           locations!inner(id, name, iana_timezone)
-         )
-       ),
-       attendance_records(id)`
-    )
-    .gte("scheduled_start_utc", windowStartUtc)
-    .lte("scheduled_start_utc", windowEndUtc)
-    .order("scheduled_start_utc", { ascending: true });
-
-  const sessions = ((sessionsData ?? []) as unknown as SessionRow[]).filter(
-    (s) => s.status !== "cancelled"
-  );
+  const loaded = await loadSessionsInWindow(windowStartUtc, windowEndUtc);
+  // Re-shape into the SessionRow shape this file expects.
+  const sessions: SessionRow[] = loaded.map((s) => ({
+    id: s.id,
+    scheduled_start_utc: s.scheduled_start_utc,
+    scheduled_end_utc: s.scheduled_end_utc,
+    status: s.status,
+    time_slots: {
+      classrooms: {
+        name: s.time_slots.classrooms.name,
+        color: s.time_slots.classrooms.color,
+        locations: s.time_slots.classrooms.locations,
+      },
+    },
+    attendance_records: s.attendance_records.map((a) => ({ id: a.id })),
+  }));
 
   let diagnosticBareCount: number | null = null;
   if (sessions.length === 0) {
