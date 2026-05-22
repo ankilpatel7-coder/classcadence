@@ -20,10 +20,11 @@ export default async function OfferMakeupPage({
   await getCurrentUserOrRedirect();
   const supabase = createSupabaseServerClient();
 
-  // 1. Absent attendance row
+  // 1. Absent attendance row. Defensive select — omits is_makeup so the
+  //    query stays valid even if the column migration hasn't been applied.
   const { data: absent } = await supabase
     .from("attendance_records")
-    .select("id, status, session_id, student_id, is_makeup")
+    .select("id, status, session_id, student_id")
     .eq("id", params.id)
     .maybeSingle();
   if (!absent) notFound();
