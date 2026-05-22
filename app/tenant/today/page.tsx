@@ -226,11 +226,11 @@ export default async function TodayPage({
           ) : null}
         </div>
       ) : (
-        <div className="panel overflow-hidden">
+        <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
           {/* Desktop table */}
           <table className="hidden min-w-full divide-y divide-line md:table">
-            <thead className="bg-bg/60">
-              <tr>
+            <thead>
+              <tr className="border-b border-line bg-bg/50">
                 <Th>Time</Th>
                 <Th>Class</Th>
                 <Th>Student</Th>
@@ -238,7 +238,7 @@ export default async function TodayPage({
                 <Th className="text-right">Actions</Th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line bg-surface">
+            <tbody className="divide-y divide-line/60 bg-surface">
               {rows.map((r, idx) => {
                 const prev = idx > 0 ? rows[idx - 1] : null;
                 const isNewSession = !prev || prev.sessionId !== r.sessionId;
@@ -350,17 +350,27 @@ function Row({
   return (
     <>
       {isFirstOfSession ? (
-        <tr className="bg-bg/30">
+        <tr
+          style={{
+            backgroundImage: `linear-gradient(90deg, ${r.classroomColor}1A 0%, ${r.classroomColor}08 40%, transparent 100%)`,
+            borderLeft: `3px solid ${r.classroomColor}`,
+          }}
+        >
           <td colSpan={5} className="px-4 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
                 <span
-                  className="inline-block h-3 w-3 rounded-full"
+                  className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-surface"
                   style={{ backgroundColor: r.classroomColor }}
                 />
-                <p className="text-sm font-semibold uppercase tracking-wider text-ink">
-                  {formatTimeInTimezone(r.startUtc, r.tz)}–
-                  {formatTimeInTimezone(r.endUtc, r.tz)} · {r.classroomName}
+                <p className="font-mono text-base font-bold tabular-nums text-ink">
+                  {formatTimeInTimezone(r.startUtc, r.tz)}
+                  <span className="text-muted">–</span>
+                  {formatTimeInTimezone(r.endUtc, r.tz)}
+                </p>
+                <span className="text-muted">·</span>
+                <p className="text-sm font-semibold text-ink/85">
+                  {r.classroomName}
                 </p>
               </div>
               {sessionExpected > 0 ? (
@@ -368,10 +378,10 @@ function Row({
                   <input type="hidden" name="session_id" value={r.sessionId} />
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-xs font-semibold text-white shadow-emboss hover:brightness-110"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-success px-3.5 py-1.5 text-xs font-semibold text-white shadow-emboss transition hover:-translate-y-px hover:brightness-110"
                   >
-                    <CheckCheck className="h-4 w-4" />
-                    Check in all expected ({sessionExpected})
+                    <CheckCheck className="h-3.5 w-3.5" />
+                    Check in all ({sessionExpected})
                   </button>
                 </form>
               ) : null}
@@ -380,16 +390,24 @@ function Row({
         </tr>
       ) : null}
 
-      <tr className="hover:bg-bg/40">
-        <td className="px-4 py-3 text-sm font-medium text-ink tabular-nums">
+      <tr className="transition hover:bg-primary-soft/20">
+        <td className="px-4 py-3.5 text-sm font-semibold text-ink tabular-nums">
           {formatTimeInTimezone(r.startUtc, r.tz)}
         </td>
-        <td className="px-4 py-3 text-sm text-muted">{r.classroomName}</td>
-        <td className="px-4 py-3">
+        <td className="px-4 py-3.5">
+          <span className="inline-flex items-center gap-2 text-sm text-ink/70">
+            <span
+              className="inline-block h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: r.classroomColor }}
+            />
+            {r.classroomName}
+          </span>
+        </td>
+        <td className="px-4 py-3.5">
           <div className="flex items-center gap-3">
             <StudentAvatar
               name={`${r.firstName} ${r.lastName}`}
-              size={32}
+              size={36}
             />
             <div>
               <p className="flex flex-wrap items-center gap-1.5 text-base font-semibold text-ink">
@@ -431,10 +449,10 @@ function Row({
             </div>
           </div>
         </td>
-        <td className="px-4 py-2">
+        <td className="px-4 py-3.5">
           <StatusBadge status={r.status} />
         </td>
-        <td className="px-4 py-2 text-right">
+        <td className="px-4 py-3.5 text-right">
           <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
             <AttendanceRowActions
               attendanceId={r.attendanceId}
@@ -489,14 +507,24 @@ function DayStat({
     danger: "from-danger/10 to-surface text-danger",
     warning: "from-warning/10 to-surface text-warning",
   } as const;
+  const accentClasses = {
+    muted: "bg-line",
+    success: "bg-success",
+    danger: "bg-danger",
+    warning: "bg-warning",
+  } as const;
   return (
     <div
-      className={`rounded-lg border border-line bg-gradient-to-br p-4 shadow-card ${toneClasses[tone]}`}
+      className={`relative overflow-hidden rounded-xl border border-line bg-gradient-to-br p-4 shadow-card transition hover:-translate-y-px hover:shadow-lift ${toneClasses[tone]}`}
     >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.15em] opacity-70">
+      <span
+        aria-hidden
+        className={`absolute inset-x-0 top-0 h-1 ${accentClasses[tone]}`}
+      />
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] opacity-70">
         {label}
       </p>
-      <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums">
+      <p className="mt-1.5 text-3xl font-bold tracking-tight tabular-nums">
         {value}
       </p>
     </div>
