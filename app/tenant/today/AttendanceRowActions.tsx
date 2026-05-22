@@ -6,36 +6,51 @@ import { updateAttendanceAction } from "./actions";
 
 type Action = "check_in" | "check_out" | "mark_absent" | "mark_excused" | "reset";
 
-const META: Record<Action, { label: string; icon: typeof Check; classes: string }> = {
+type Meta = {
+  label: string;
+  icon: typeof Check;
+  classes: string;
+  style?: React.CSSProperties;
+};
+
+const META: Record<Action, Meta> = {
   check_in: {
     label: "Check in",
     icon: Check,
     classes:
-      "bg-success text-white shadow-emboss hover:brightness-110 hover:shadow-lift hover:-translate-y-px",
+      "text-white shadow-emboss hover:brightness-110 hover:-translate-y-px active:translate-y-0",
+    style: {
+      backgroundImage:
+        "linear-gradient(180deg, #2BC98A 0%, #16A34A 55%, #0B6845 100%)",
+    },
   },
   check_out: {
     label: "Check out",
     icon: LogOut,
     classes:
-      "bg-primary text-white shadow-emboss hover:brightness-110 hover:shadow-lift hover:-translate-y-px",
+      "text-white shadow-emboss hover:brightness-110 hover:-translate-y-px active:translate-y-0",
+    style: {
+      backgroundImage:
+        "linear-gradient(180deg, #2746a1 0%, var(--color-primary) 55%, var(--color-primary-strong) 100%)",
+    },
   },
   mark_absent: {
     label: "Absent",
     icon: CircleSlash,
     classes:
-      "border border-danger/30 bg-surface text-danger shadow-card hover:bg-danger/5 hover:shadow-lift hover:-translate-y-px",
+      "bg-danger/10 text-danger ring-1 ring-inset ring-danger/15 hover:bg-danger/15 hover:ring-danger/25 hover:-translate-y-px active:translate-y-0",
   },
   mark_excused: {
     label: "Excuse",
     icon: FilePen,
     classes:
-      "border border-line bg-surface text-muted shadow-card hover:bg-bg hover:shadow-lift hover:-translate-y-px",
+      "bg-bg/80 text-ink/70 ring-1 ring-inset ring-line/70 hover:bg-bg hover:text-ink hover:-translate-y-px active:translate-y-0",
   },
   reset: {
     label: "Undo",
     icon: RotateCcw,
     classes:
-      "border border-line bg-surface text-muted shadow-card hover:bg-bg hover:shadow-lift hover:-translate-y-px",
+      "bg-transparent text-muted ring-1 ring-inset ring-line/60 hover:bg-bg/70 hover:text-ink hover:-translate-y-px active:translate-y-0",
   },
 };
 
