@@ -25,23 +25,22 @@ export default async function NewStudentPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <Link
-        href="/tenant/students"
-        className="inline-flex items-center gap-1 text-sm text-muted transition hover:text-ink"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        Back to students
-      </Link>
-
+    <div className="mx-auto max-w-2xl space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold text-ink">Add a student</h1>
-        <p className="mt-1 text-sm text-muted">
+        <Link
+          href="/tenant/students"
+          className="inline-flex items-center gap-1 text-xs text-muted transition hover:text-ink"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+          Back to students
+        </Link>
+        <h1 className="mt-1 text-xl font-semibold text-ink">Add a student</h1>
+        <p className="text-xs text-muted">
           You can assign them to time slots after saving.
         </p>
       </div>
 
-      <div className="panel p-6">
+      <div className="panel p-4 md:p-5">
         <CreateStudentForm locations={locations} />
       </div>
     </div>

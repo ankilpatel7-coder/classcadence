@@ -57,8 +57,8 @@ export function EditStudentForm({
 }) {
   const [state, formAction] = useFormState(updateStudentAction, initialState);
   return (
-    <div className="space-y-4">
-      <form action={formAction} className="space-y-6">
+    <div className="space-y-3">
+      <form action={formAction} className="space-y-4">
         <input type="hidden" name="id" value={student.id} />
         <StudentFields
           defaults={student}
@@ -77,7 +77,7 @@ export function EditStudentForm({
           </p>
         ) : null}
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Submit />
           <Link href="/tenant/students" className="btn-secondary">
             Cancel
@@ -85,7 +85,7 @@ export function EditStudentForm({
         </div>
       </form>
 
-      <form action={deleteStudentAction} className="border-t border-line pt-4">
+      <form action={deleteStudentAction} className="flex justify-end border-t border-line pt-3">
         <input type="hidden" name="id" value={student.id} />
         <DeleteBtn
           name={

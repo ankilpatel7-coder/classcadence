@@ -60,7 +60,7 @@ function RemoveButton({ label }: { label: string }) {
       onClick={(e) => {
         if (!window.confirm(`Remove this student from ${label}?`)) e.preventDefault();
       }}
-      className="inline-flex items-center gap-1 rounded-md border border-danger/30 bg-surface px-2.5 py-1.5 text-xs font-medium text-danger transition hover:bg-danger/5 disabled:opacity-60"
+      className="btn-danger !px-2.5 !py-1 !text-xs"
     >
       <Trash2 className="h-3.5 w-3.5" />
       {pending ? "Removing…" : "Remove"}
@@ -151,7 +151,7 @@ export function EnrollmentsSection({
     : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Current classes */}
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3">
@@ -169,28 +169,28 @@ export function EnrollmentsSection({
           ) : null}
         </div>
         {currentEnrollments.length === 0 ? (
-          <p className="rounded-md border border-dashed border-line bg-bg/40 px-4 py-4 text-center text-xs text-muted">
+          <p className="rounded-md border border-dashed border-line bg-bg/40 px-4 py-3 text-center text-xs text-muted">
             Not enrolled in any classes yet.
           </p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-1.5">
             {currentEnrollments.map((e) => (
               <li
                 key={e.enrollment_id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-surface px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-surface px-3 py-2"
                 style={{ borderLeftColor: e.classroom_color, borderLeftWidth: 4 }}
               >
-                <div>
-                  <p className="text-sm font-medium text-ink">
-                    <span className="text-xs uppercase tracking-wider text-muted">
+                <div className="min-w-0">
+                  <p className="text-sm text-ink">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                       {weekdayFull(e.weekday)}
                     </span>{" "}
-                    <span className="font-mono tabular-nums">
+                    <span className="font-mono tabular-nums font-medium">
                       {e.start_time}–{e.end_time}
                     </span>
-                  </p>
-                  <p className="text-xs text-muted">
-                    {e.classroom_name} · {e.location_name}
+                    <span className="text-muted"> · </span>
+                    <span className="text-ink/80">{e.classroom_name}</span>
+                    <span className="text-muted text-xs"> · {e.location_name}</span>
                   </p>
                 </div>
                 <form action={endEnrollmentAction}>
@@ -208,17 +208,17 @@ export function EnrollmentsSection({
 
       {/* Add a class — only render if the student has headroom */}
       {atCap ? (
-        <div className="rounded-md border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-ink">
+        <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-ink">
           <p className="font-medium">
             All {weeklyCap} weekly classes used.
           </p>
-          <p className="mt-1 text-xs text-muted">
+          <p className="mt-0.5 text-xs text-muted">
             Remove an existing class above to enroll this student in a different
             slot.
           </p>
         </div>
       ) : (
-      <div className="space-y-4 rounded-md border border-line bg-bg/30 p-4">
+      <div className="space-y-3 rounded-md border border-line bg-bg/30 p-3">
         <div className="flex items-center justify-between gap-3">
           <h3 className="section-eyebrow">Add a class</h3>
           {weeklyCap > 0 ? (

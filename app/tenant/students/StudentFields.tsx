@@ -32,12 +32,18 @@ export function StudentFields({
   fieldErrors: StudentFieldErrors;
   locations: LocationOption[];
 }) {
+  const hasSecondary = Boolean(
+    defaults.secondary_parent_name ||
+      defaults.secondary_email ||
+      defaults.secondary_phone ||
+      defaults.mailing_address
+  );
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       {/* Student */}
-      <section className="space-y-4">
+      <section className="space-y-3">
         <h3 className="section-eyebrow">Student</h3>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Field id="first_name" label="First name" required error={fieldErrors.first_name}>
             <input
               id="first_name" name="first_name" type="text"
@@ -56,7 +62,7 @@ export function StudentFields({
           </Field>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Field id="dob" label="Date of birth" error={fieldErrors.dob}>
             <input
               id="dob" name="dob" type="date"
@@ -74,7 +80,7 @@ export function StudentFields({
           </Field>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Field id="location_id" label="Primary location" required error={fieldErrors.location_id}>
             <select
               id="location_id" name="location_id" required
@@ -104,7 +110,7 @@ export function StudentFields({
 
         <Field id="internal_notes" label="Internal notes" error={fieldErrors.internal_notes}>
           <textarea
-            id="internal_notes" name="internal_notes" rows={3} maxLength={2000}
+            id="internal_notes" name="internal_notes" rows={2} maxLength={2000}
             defaultValue={defaults.internal_notes ?? ""}
             className="form-input"
           />
@@ -112,20 +118,20 @@ export function StudentFields({
       </section>
 
       {/* Primary parent */}
-      <section className="space-y-4">
+      <section className="space-y-3">
         <h3 className="section-eyebrow">Primary parent / guardian</h3>
-        <Field
-          id="primary_parent_name" label="Name" required
-          error={fieldErrors.primary_parent_name}
-        >
-          <input
-            id="primary_parent_name" name="primary_parent_name" type="text"
-            required maxLength={120}
-            defaultValue={defaults.primary_parent_name ?? ""}
-            className="form-input"
-          />
-        </Field>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <Field
+            id="primary_parent_name" label="Name" required
+            error={fieldErrors.primary_parent_name}
+          >
+            <input
+              id="primary_parent_name" name="primary_parent_name" type="text"
+              required maxLength={120}
+              defaultValue={defaults.primary_parent_name ?? ""}
+              className="form-input"
+            />
+          </Field>
           <Field id="primary_email" label="Email" error={fieldErrors.primary_email}>
             <input
               id="primary_email" name="primary_email" type="email"
@@ -146,66 +152,78 @@ export function StudentFields({
         </p>
       </section>
 
-      {/* Secondary parent */}
-      <section className="space-y-4">
-        <h3 className="section-eyebrow">Secondary parent (optional)</h3>
-        <Field
-          id="secondary_parent_name" label="Name"
-          error={fieldErrors.secondary_parent_name}
-        >
-          <input
-            id="secondary_parent_name" name="secondary_parent_name" type="text" maxLength={120}
-            defaultValue={defaults.secondary_parent_name ?? ""}
-            className="form-input"
-          />
-        </Field>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field id="secondary_email" label="Email" error={fieldErrors.secondary_email}>
-            <input
-              id="secondary_email" name="secondary_email" type="email"
-              defaultValue={defaults.secondary_email ?? ""}
-              className="form-input"
-            />
-          </Field>
-          <Field id="secondary_phone" label="Phone" error={fieldErrors.secondary_phone}>
-            <input
-              id="secondary_phone" name="secondary_phone" type="tel"
-              defaultValue={defaults.secondary_phone ?? ""}
-              className="form-input"
-            />
-          </Field>
-        </div>
-      </section>
+      {/* Optional sections — collapsed by default to keep the form short */}
+      <details className="group rounded-md border border-line bg-bg/30 px-3 py-2 open:bg-bg/50" open={hasSecondary}>
+        <summary className="cursor-pointer list-none text-xs font-medium text-muted transition hover:text-ink">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary group-open:bg-primary-strong" />
+            More details · secondary parent, mailing, notifications
+          </span>
+        </summary>
 
-      {/* Mailing + notifications */}
-      <section className="space-y-4">
-        <h3 className="section-eyebrow">Mailing &amp; notifications</h3>
-        <Field id="mailing_address" label="Mailing address" error={fieldErrors.mailing_address}>
-          <textarea
-            id="mailing_address" name="mailing_address" rows={2}
-            defaultValue={defaults.mailing_address ?? ""}
-            className="form-input"
-          />
-        </Field>
-        <div className="space-y-2 text-sm text-ink">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox" name="notify_email"
-              defaultChecked={defaults.notify_email !== false}
-              className="h-4 w-4 rounded border-line text-primary focus:ring-primary"
-            />
-            Email reminders
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox" name="notify_whatsapp"
-              defaultChecked={defaults.notify_whatsapp !== false}
-              className="h-4 w-4 rounded border-line text-primary focus:ring-primary"
-            />
-            WhatsApp reminders (delivered once WhatsApp is wired)
-          </label>
+        <div className="mt-3 space-y-5">
+          {/* Secondary parent */}
+          <section className="space-y-3">
+            <h3 className="section-eyebrow">Secondary parent (optional)</h3>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <Field
+                id="secondary_parent_name" label="Name"
+                error={fieldErrors.secondary_parent_name}
+              >
+                <input
+                  id="secondary_parent_name" name="secondary_parent_name" type="text" maxLength={120}
+                  defaultValue={defaults.secondary_parent_name ?? ""}
+                  className="form-input"
+                />
+              </Field>
+              <Field id="secondary_email" label="Email" error={fieldErrors.secondary_email}>
+                <input
+                  id="secondary_email" name="secondary_email" type="email"
+                  defaultValue={defaults.secondary_email ?? ""}
+                  className="form-input"
+                />
+              </Field>
+              <Field id="secondary_phone" label="Phone" error={fieldErrors.secondary_phone}>
+                <input
+                  id="secondary_phone" name="secondary_phone" type="tel"
+                  defaultValue={defaults.secondary_phone ?? ""}
+                  className="form-input"
+                />
+              </Field>
+            </div>
+          </section>
+
+          {/* Mailing + notifications */}
+          <section className="space-y-3">
+            <h3 className="section-eyebrow">Mailing &amp; notifications</h3>
+            <Field id="mailing_address" label="Mailing address" error={fieldErrors.mailing_address}>
+              <textarea
+                id="mailing_address" name="mailing_address" rows={2}
+                defaultValue={defaults.mailing_address ?? ""}
+                className="form-input"
+              />
+            </Field>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-ink">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox" name="notify_email"
+                  defaultChecked={defaults.notify_email !== false}
+                  className="h-4 w-4 rounded border-line text-primary focus:ring-primary"
+                />
+                Email reminders
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox" name="notify_whatsapp"
+                  defaultChecked={defaults.notify_whatsapp !== false}
+                  className="h-4 w-4 rounded border-line text-primary focus:ring-primary"
+                />
+                WhatsApp reminders <span className="text-xs text-muted">(when wired)</span>
+              </label>
+            </div>
+          </section>
         </div>
-      </section>
+      </details>
     </div>
   );
 }

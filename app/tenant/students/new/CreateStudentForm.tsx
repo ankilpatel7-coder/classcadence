@@ -19,7 +19,7 @@ function Submit() {
 export function CreateStudentForm({ locations }: { locations: LocationOption[] }) {
   const [state, formAction] = useFormState(createStudentAction, initialState);
   return (
-    <form action={formAction} className="space-y-6">
+    <form action={formAction} className="space-y-4">
       <StudentFields
         defaults={{}}
         fieldErrors={state.fieldErrors}

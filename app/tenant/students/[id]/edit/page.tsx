@@ -183,22 +183,25 @@ export default async function EditStudentPage({
   });
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
-      <Link
-        href="/tenant/students"
-        className="inline-flex items-center gap-1 text-sm text-muted transition hover:text-ink"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        Back to students
-      </Link>
-
-      <div>
-        <h1 className="text-2xl font-semibold text-ink">
-          {s.first_name} {s.last_name}
-        </h1>
-        <p className="mt-1 text-sm text-muted">
-          {[s.grade_level, s.lifecycle_status].filter(Boolean).join(" · ")}
-        </p>
+    <div className="mx-auto max-w-3xl space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <Link
+            href="/tenant/students"
+            className="inline-flex items-center gap-1 text-xs text-muted transition hover:text-ink"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            Back to students
+          </Link>
+          <h1 className="mt-1 text-xl font-semibold text-ink">
+            {s.first_name} {s.last_name}
+          </h1>
+          {[s.grade_level, s.lifecycle_status].filter(Boolean).length > 0 ? (
+            <p className="text-xs text-muted">
+              {[s.grade_level, s.lifecycle_status].filter(Boolean).join(" · ")}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {searchParams.created ? <Flash kind="success">Student created. Enroll them in a time slot below.</Flash> : null}
@@ -206,49 +209,45 @@ export default async function EditStudentPage({
       {searchParams.ended ? <Flash kind="success">Enrollment ended.</Flash> : null}
       {searchParams.error ? <Flash kind="danger">{decodeURIComponent(searchParams.error)}</Flash> : null}
 
-      <section className="panel p-6">
-        <h2 className="section-eyebrow">Details</h2>
-        <div className="mt-4">
-          <EditStudentForm
-            student={{
-              id: s.id,
-              location_id: s.location_id,
-              first_name: s.first_name,
-              last_name: s.last_name,
-              dob: s.dob,
-              grade_level: s.grade_level,
-              lifecycle_status: s.lifecycle_status,
-              internal_notes: s.internal_notes,
-              primary_parent_name: s.primary_parent_name ?? undefined,
-              primary_email: s.primary_email,
-              primary_phone: s.primary_phone,
-              secondary_parent_name: s.secondary_parent_name,
-              secondary_email: s.secondary_email,
-              secondary_phone: s.secondary_phone,
-              mailing_address: s.mailing_address,
-              notify_email: notify.email ?? true,
-              notify_whatsapp: notify.whatsapp ?? true,
-            }}
-            locations={locations ?? []}
-          />
-        </div>
+      <section className="panel p-4 md:p-5">
+        <EditStudentForm
+          student={{
+            id: s.id,
+            location_id: s.location_id,
+            first_name: s.first_name,
+            last_name: s.last_name,
+            dob: s.dob,
+            grade_level: s.grade_level,
+            lifecycle_status: s.lifecycle_status,
+            internal_notes: s.internal_notes,
+            primary_parent_name: s.primary_parent_name ?? undefined,
+            primary_email: s.primary_email,
+            primary_phone: s.primary_phone,
+            secondary_parent_name: s.secondary_parent_name,
+            secondary_email: s.secondary_email,
+            secondary_phone: s.secondary_phone,
+            mailing_address: s.mailing_address,
+            notify_email: notify.email ?? true,
+            notify_whatsapp: notify.whatsapp ?? true,
+          }}
+          locations={locations ?? []}
+        />
       </section>
 
-      <section className="panel p-6">
-        <h2 className="section-eyebrow">Classes</h2>
-        <p className="mt-1 text-xs text-muted">
-          One class per day. Tap an existing class to remove it. To add a new one,
-          choose a classroom, then a day, then an available time.
-        </p>
-        <div className="mt-4">
-          <EnrollmentsSection
-            studentId={s.id}
-            currentEnrollments={currentEnrollments}
-            classrooms={wizardClassrooms}
-            occupiedWeekdays={Array.from(occupiedWeekdays)}
-            lockedClassroomId={lockedClassroomId}
-          />
+      <section className="panel p-4 md:p-5">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="section-eyebrow">Classes</h2>
+          <p className="text-[11px] text-muted">
+            One class per day · tap to remove
+          </p>
         </div>
+        <EnrollmentsSection
+          studentId={s.id}
+          currentEnrollments={currentEnrollments}
+          classrooms={wizardClassrooms}
+          occupiedWeekdays={Array.from(occupiedWeekdays)}
+          lockedClassroomId={lockedClassroomId}
+        />
       </section>
     </div>
   );
