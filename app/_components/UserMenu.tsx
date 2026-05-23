@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LogOut, User as UserIcon } from "lucide-react";
+import Link from "next/link";
+import { KeyRound, LogOut } from "lucide-react";
 import { signOutAction } from "@/app/login/actions";
 
 function initialsFrom(name: string, email: string): string {
@@ -81,12 +82,14 @@ export function UserMenu({
             ) : null}
           </div>
           <div className="p-1.5">
-            <div className="rounded-md px-2.5 py-1.5 text-xs text-muted">
-              <span className="inline-flex items-center gap-1.5">
-                <UserIcon className="h-3.5 w-3.5" />
-                Your account
-              </span>
-            </div>
+            <Link
+              href="/account/password"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-ink transition hover:bg-bg"
+            >
+              <KeyRound className="h-4 w-4 text-muted" />
+              Change password
+            </Link>
             <form action={signOutAction}>
               <button
                 type="submit"
