@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   Clock,
   Users,
@@ -16,18 +17,33 @@ import {
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-bg relative">
-      {/* Single subtle background blob — indigo */}
+    <main className="min-h-screen bg-bg relative overflow-hidden">
+      {/* Layered background — emerald wash top-center, accent peach bottom-right,
+          plus a soft sky-blue blob mid-left. Three colors instead of one so the
+          page reads as alive even before any content lands on it. */}
       <div
-        className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[1100px] h-[600px] opacity-30 blur-3xl -z-10"
+        aria-hidden
+        className="pointer-events-none absolute top-[-120px] left-1/2 -translate-x-1/2 w-[1200px] h-[700px] opacity-60 blur-3xl -z-10"
+        style={{ background: "radial-gradient(closest-side, #D6F4E5, transparent)" }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[280px] -left-[160px] w-[640px] h-[640px] opacity-40 blur-3xl -z-10"
         style={{ background: "radial-gradient(closest-side, #DBEAFE, transparent)" }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[1100px] -right-[160px] w-[640px] h-[640px] opacity-50 blur-3xl -z-10"
+        style={{ background: "radial-gradient(closest-side, #FFEDD5, transparent)" }}
       />
 
       <Nav />
       <Hero />
       <TrustStrip />
       <Features />
+      <ProductTour />
       <ParentComms />
+      <ReminderShowcase />
       <HowItWorks />
       <Stats />
       <CTAStrip />
@@ -37,28 +53,32 @@ export default function HomePage() {
 }
 
 /* =========================================================================
-   Logo glyph — three rhythm bars
+   Logo glyph — uses the actual brand logo asset from /public/logo.svg
+   instead of a hand-drawn SVG so the site, the app, and the email
+   sender all show the exact same mark.
 ========================================================================= */
-function Glyph({ size = 28 }: { size?: number }) {
+function Glyph({ size = 32, dropShadow = true }: { size?: number; dropShadow?: boolean }) {
   return (
-    <svg
+    <Image
+      src="/logo.svg"
+      alt=""
       width={size}
       height={size}
-      viewBox="0 0 28 28"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden
-    >
-      <rect x="3.5" y="11" width="4.5" height="15" rx="2.25" fill="#1E3A8A" />
-      <rect x="11.75" y="4" width="4.5" height="22" rx="2.25" fill="#F97316" />
-      <rect x="20" y="8" width="4.5" height="18" rx="2.25" fill="#1E3A8A" />
-    </svg>
+      priority
+      className="rounded-md"
+      style={
+        dropShadow
+          ? { filter: "drop-shadow(0 6px 14px rgba(11,104,69,0.28))" }
+          : undefined
+      }
+    />
   );
 }
 
 function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[11px] font-semibold text-accent uppercase tracking-[0.18em]">
+    <p className="inline-flex items-center gap-2 text-[11px] font-bold text-accent uppercase tracking-[0.22em]">
+      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />
       {children}
     </p>
   );
@@ -69,28 +89,35 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 ========================================================================= */
 function Nav() {
   return (
-    <header className="relative">
-      <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+    <header className="relative sticky top-0 z-30 backdrop-blur-md bg-surface/80 border-b border-line/60">
+      <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <Glyph />
+          <Glyph size={32} />
           <span className="font-wordmark text-xl text-primary font-semibold tracking-tight">
             ClassCadence
           </span>
         </div>
-        <nav className="hidden md:flex items-center gap-8 text-sm text-ink/75">
+        <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-ink/75">
           <Link href="#features" className="hover:text-primary transition-colors">Features</Link>
           <Link href="#how" className="hover:text-primary transition-colors">How it works</Link>
           <Link href="/login" className="hover:text-primary transition-colors">Sign in</Link>
           <Link
             href="/signup"
-            className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-strong transition-colors font-medium text-[13px]"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-white font-medium text-[13px] transition hover:-translate-y-px"
+            style={{
+              backgroundImage:
+                "linear-gradient(180deg, #2BC98A 0%, var(--color-primary) 55%, var(--color-primary-strong) 100%)",
+              boxShadow:
+                "0 2px 4px rgba(15,23,42,0.1), 0 8px 18px -8px rgba(11,104,69,0.4), inset 0 1px 0 rgba(255,255,255,0.4)",
+            }}
           >
             Start free
+            <ChevronRight size={14} />
           </Link>
         </nav>
         <Link
           href="/signup"
-          className="md:hidden px-4 py-2 bg-primary text-white rounded-md text-sm font-medium"
+          className="md:hidden px-4 py-2 bg-primary text-white rounded-md text-sm font-medium shadow-emboss"
         >
           Start free
         </Link>
@@ -105,14 +132,30 @@ function Nav() {
 function Hero() {
   return (
     <section className="relative max-w-6xl mx-auto px-6 pt-16 md:pt-24 pb-12 text-center">
-      <div className="inline-flex items-center gap-2 px-3 py-1 mb-7 rounded-full bg-primary-soft text-primary text-[11px] font-semibold tracking-wide">
-        <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-        Built for US supplemental learning centers
+      <div
+        className="inline-flex items-center gap-2 px-3.5 py-1.5 mb-7 rounded-full text-[11px] font-bold tracking-[0.12em] uppercase text-primary-strong"
+        style={{
+          backgroundImage:
+            "linear-gradient(180deg, #FFFFFF 0%, var(--color-primary-soft) 100%)",
+          boxShadow:
+            "0 1px 2px rgba(15,23,42,0.06), 0 8px 18px -10px rgba(11,104,69,0.25), inset 0 1px 0 rgba(255,255,255,0.8)",
+        }}
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+        Built for US Supplemental Learning Centers
       </div>
-      <h1 className="font-display text-5xl md:text-7xl font-semibold text-primary leading-[1.05]">
-        The rhythm of every
+      <h1 className="font-display text-[44px] md:text-7xl font-bold uppercase text-primary leading-[1.02] tracking-[-0.02em]">
+        The Rhythm Of Every
         <br />
-        great learning center.
+        <span
+          className="bg-clip-text text-transparent"
+          style={{
+            backgroundImage:
+              "linear-gradient(180deg, #2BC98A 0%, var(--color-primary) 55%, var(--color-primary-strong) 100%)",
+          }}
+        >
+          Great Learning Center.
+        </span>
       </h1>
       <p className="mt-7 text-lg md:text-xl text-ink/70 max-w-2xl mx-auto leading-relaxed">
         Daily check-ins, automatic absence detection, and parent email reminders — all in one calm dashboard, ready the evening you sign up.
@@ -121,16 +164,26 @@ function Hero() {
       <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
         <Link
           href="/signup"
-          className="group inline-flex items-center gap-2 px-7 py-3.5 rounded-md bg-accent text-white font-medium shadow-card hover:bg-accent/90 hover:shadow-pop transition-all"
+          className="group inline-flex items-center gap-2 px-8 py-4 rounded-md text-white font-semibold uppercase tracking-[0.08em] text-sm transition hover:-translate-y-px"
+          style={{
+            backgroundImage:
+              "linear-gradient(180deg, #FDBA74 0%, var(--color-accent) 55%, #C2410C 100%)",
+            boxShadow:
+              "0 4px 8px rgba(15,23,42,0.1), 0 16px 32px -10px rgba(249,115,22,0.45), inset 0 1px 0 rgba(255,255,255,0.4)",
+          }}
         >
-          Start free
+          Start Free
           <ChevronRight size={18} className="group-hover:translate-x-0.5 transition-transform" />
         </Link>
         <Link
           href="/login"
-          className="group inline-flex items-center gap-2 px-7 py-3.5 rounded-md border border-line bg-surface text-primary font-medium hover:bg-primary-soft hover:border-primary/30 transition-colors"
+          className="group inline-flex items-center gap-2 px-8 py-4 rounded-md bg-surface text-primary-strong font-semibold uppercase tracking-[0.08em] text-sm ring-1 ring-inset ring-line/80 transition hover:-translate-y-px hover:ring-primary/40 hover:bg-primary-soft/40"
+          style={{
+            boxShadow:
+              "0 2px 4px rgba(15,23,42,0.05), 0 8px 18px -10px rgba(15,23,42,0.15)",
+          }}
         >
-          Sign in
+          Sign In
         </Link>
       </div>
 
@@ -199,8 +252,8 @@ function Features() {
     <section id="features" className="max-w-6xl mx-auto px-6 py-24 md:py-28">
       <div className="text-center mb-16 max-w-2xl mx-auto">
         <Eyebrow>Capabilities</Eyebrow>
-        <h2 className="mt-3 font-display text-4xl md:text-5xl font-semibold text-primary leading-tight">
-          Everything your center runs on. In one place.
+        <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-primary leading-[1.05] tracking-[-0.015em]">
+          Everything Your Center Runs On.<br />In One Place.
         </h2>
         <p className="mt-5 text-lg text-ink/70 leading-relaxed">
           Built to replace the clipboard, the group text, and the spreadsheet — without replacing the human touch that keeps families coming back.
@@ -252,9 +305,9 @@ function ParentComms() {
       <div className="max-w-6xl mx-auto px-6 py-24 md:py-28">
         <div className="grid md:grid-cols-2 gap-12 md:gap-20 items-center">
           <div>
-            <Eyebrow>Stay in sync</Eyebrow>
-            <h2 className="mt-3 font-display text-4xl md:text-5xl font-semibold text-primary leading-tight">
-              Parents stay informed. You stay focused.
+            <Eyebrow>Stay In Sync</Eyebrow>
+            <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-primary leading-[1.05] tracking-[-0.015em]">
+              Parents Stay Informed.<br />You Stay Focused.
             </h2>
             <p className="mt-6 text-lg text-ink/70 leading-relaxed">
               Every reminder, absence alert, and make-up offer is sent automatically — branded as you. The same events surface in your in-app bell, so you can see at a glance what just happened.
@@ -295,9 +348,9 @@ function HowItWorks() {
   return (
     <section id="how" className="max-w-6xl mx-auto px-6 py-24 md:py-28">
       <div className="text-center mb-16 max-w-2xl mx-auto">
-        <Eyebrow>How it works</Eyebrow>
-        <h2 className="mt-3 font-display text-4xl md:text-5xl font-semibold text-primary leading-tight">
-          Paper to digital, in one evening.
+        <Eyebrow>How It Works</Eyebrow>
+        <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-primary leading-[1.05] tracking-[-0.015em]">
+          Paper To Digital,<br />In One Evening.
         </h2>
       </div>
 
@@ -378,8 +431,8 @@ function CTAStrip() {
   return (
     <section className="bg-primary text-white">
       <div className="max-w-4xl mx-auto px-6 py-20 md:py-24 text-center">
-        <h2 className="font-display text-4xl md:text-5xl font-semibold leading-tight">
-          Run your center calmer, starting tonight.
+        <h2 className="font-display text-3xl md:text-5xl font-bold uppercase leading-[1.05] tracking-[-0.015em]">
+          Run Your Center Calmer,<br />Starting Tonight.
         </h2>
         <p className="mt-5 text-lg text-primary-soft/90 max-w-xl mx-auto leading-relaxed">
           Set up your location, add your students, and welcome the first check-in — all in a single evening. Cancel any time.
@@ -503,13 +556,19 @@ function FeatureCard({
 function TodayMockup() {
   return (
     <div className="mt-16 md:mt-20 mx-auto max-w-4xl text-left">
-      <div className="bg-surface rounded-xl shadow-pop border border-line overflow-hidden">
+      <div
+        className="bg-surface rounded-2xl border border-line overflow-hidden"
+        style={{
+          boxShadow:
+            "0 10px 20px -8px rgba(15,23,42,0.18), 0 40px 80px -20px rgba(11,104,69,0.25), 0 4px 8px rgba(15,23,42,0.05)",
+        }}
+      >
         <div className="flex items-center gap-2 px-4 py-3 border-b border-line bg-bg/60">
           <span className="w-3 h-3 rounded-full bg-danger" />
           <span className="w-3 h-3 rounded-full bg-warning" />
           <span className="w-3 h-3 rounded-full bg-success" />
           <div className="ml-4 px-3 py-1 rounded-md bg-surface border border-line text-xs text-muted font-mono">
-            classcadence.app · Today at Pflugerville
+            tryclasscadence.com · Today
           </div>
         </div>
         <div className="p-7">
@@ -784,5 +843,579 @@ function StepMockReminder() {
         </span>
       </div>
     </div>
+  );
+}
+
+/* =========================================================================
+   Product tour — high-fidelity mockups of the actual app views
+   (Dashboard, Schedule, Make-ups, Students). Each tile is a "browser
+   chrome + page contents" card with brand-tinted drop shadow.
+
+   These are real components mirroring the live app, not screenshots.
+   To swap in literal PNG screenshots later, drop them into /public/
+   and replace each PageMock component with next/image's Image.
+========================================================================= */
+function ProductTour() {
+  return (
+    <section className="relative max-w-6xl mx-auto px-6 py-24 md:py-28">
+      {/* Decorative orange wash behind the grid */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-20 h-[420px] opacity-50 -z-10 blur-3xl"
+        style={{
+          background:
+            "radial-gradient(ellipse 700px 280px at 20% 30%, #FFEDD5, transparent 70%), radial-gradient(ellipse 600px 240px at 80% 60%, #D6F4E5, transparent 70%)",
+        }}
+      />
+      <div className="text-center mb-14 max-w-2xl mx-auto">
+        <Eyebrow>A Glimpse Inside</Eyebrow>
+        <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-primary leading-[1.05] tracking-[-0.015em]">
+          Every Screen Built<br />For The Front Desk.
+        </h2>
+        <p className="mt-5 text-lg text-ink/70 leading-relaxed">
+          Dashboard for the tenant admin. Today screen for the front desk. Schedule, make-ups, and student records in between.
+        </p>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-5 md:gap-6">
+        <BrowserTile
+          chromePath="tryclasscadence.com / tenant"
+          title="Tenant Admin Dashboard"
+          tone="primary"
+        >
+          <PageMockDashboard />
+        </BrowserTile>
+        <BrowserTile
+          chromePath="tryclasscadence.com / tenant / schedule"
+          title="Weekly Schedule"
+          tone="indigo"
+        >
+          <PageMockSchedule />
+        </BrowserTile>
+        <BrowserTile
+          chromePath="tryclasscadence.com / tenant / makeups"
+          title="Make-Up Tracking"
+          tone="accent"
+        >
+          <PageMockMakeups />
+        </BrowserTile>
+        <BrowserTile
+          chromePath="tryclasscadence.com / tenant / students"
+          title="Students Directory"
+          tone="primary"
+        >
+          <PageMockStudents />
+        </BrowserTile>
+      </div>
+    </section>
+  );
+}
+
+function BrowserTile({
+  chromePath,
+  title,
+  tone,
+  children,
+}: {
+  chromePath: string;
+  title: string;
+  tone: "primary" | "accent" | "indigo";
+  children: React.ReactNode;
+}) {
+  const tintShadow =
+    tone === "primary"
+      ? "0 12px 24px -12px rgba(11,104,69,0.30)"
+      : tone === "accent"
+      ? "0 12px 24px -12px rgba(249,115,22,0.30)"
+      : "0 12px 24px -12px rgba(67,56,202,0.30)";
+  const dotColor =
+    tone === "primary"
+      ? "bg-primary"
+      : tone === "accent"
+      ? "bg-accent"
+      : "bg-[#6366F1]";
+  return (
+    <div className="group">
+      <div
+        className="rounded-xl border border-line overflow-hidden bg-surface transition group-hover:-translate-y-1"
+        style={{
+          boxShadow: `0 4px 8px rgba(15,23,42,0.06), 0 24px 48px -16px rgba(15,23,42,0.18), ${tintShadow}`,
+        }}
+      >
+        <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-line bg-bg/50">
+          <span className="w-2.5 h-2.5 rounded-full bg-danger/70" />
+          <span className="w-2.5 h-2.5 rounded-full bg-warning/70" />
+          <span className="w-2.5 h-2.5 rounded-full bg-success/70" />
+          <div className="ml-3 px-2.5 py-0.5 rounded-md bg-surface border border-line text-[10px] text-muted font-mono">
+            {chromePath}
+          </div>
+        </div>
+        <div className="bg-bg/30 p-4 min-h-[260px]">{children}</div>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <span aria-hidden className={`h-2 w-2 rounded-full ${dotColor}`} />
+        <p className="text-sm font-bold uppercase tracking-[0.08em] text-primary-strong">
+          {title}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Dashboard mock ---- */
+function PageMockDashboard() {
+  return (
+    <div className="space-y-3">
+      {/* KPI tiles */}
+      <div className="grid grid-cols-4 gap-2">
+        <MockKpi label="Students" value="47" accent="bg-primary" />
+        <MockKpi label="Today" value="3" accent="bg-[#6366F1]" />
+        <MockKpi label="Make-ups" value="2" accent="bg-accent" />
+        <MockKpi label="Absent" value="1" accent="bg-danger" />
+      </div>
+      {/* Donut + bars */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="col-span-1 rounded-md border border-line bg-surface p-3">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-muted">
+            Attendance
+          </p>
+          <div className="mt-1 flex items-center justify-center">
+            <MiniRing pct={92} />
+          </div>
+        </div>
+        <div className="col-span-2 rounded-md border border-line bg-surface p-3">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-muted">
+            Last 4 Weeks
+          </p>
+          <div className="mt-2 flex items-end justify-around gap-2 h-[68px]">
+            {[78, 84, 91, 92].map((v, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                <span className="text-[9px] font-bold tabular-nums text-primary-strong">
+                  {v}%
+                </span>
+                <div
+                  className="w-full rounded-t-md"
+                  style={{
+                    height: `${v * 0.5}px`,
+                    backgroundImage:
+                      "linear-gradient(180deg, #2BC98A 0%, var(--color-primary) 55%, var(--color-primary-strong) 100%)",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MockKpi({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent: string;
+}) {
+  return (
+    <div className="relative overflow-hidden rounded-md border border-line bg-surface px-2 py-2">
+      <span
+        aria-hidden
+        className={`absolute inset-x-0 top-0 h-[3px] ${accent}`}
+      />
+      <p className="text-[9px] font-bold uppercase tracking-wider text-muted">
+        {label}
+      </p>
+      <p className="mt-1 text-xl font-bold tabular-nums text-ink leading-none">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function MiniRing({ pct }: { pct: number }) {
+  const size = 60;
+  const stroke = 6;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c * (1 - pct / 100);
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <defs>
+          <linearGradient id="miniRingGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#2BC98A" />
+            <stop offset="100%" stopColor="var(--color-primary-strong)" />
+          </linearGradient>
+        </defs>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-border)" strokeOpacity="0.5" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="url(#miniRingGrad)" strokeWidth={stroke} strokeLinecap="round" strokeDasharray={c} strokeDashoffset={offset} />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <p className="text-sm font-bold tabular-nums text-ink">{pct}%</p>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Schedule mock ---- */
+function PageMockSchedule() {
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+  // Each session: [day index, top%, height%, color]
+  const sessions: [number, number, number, string][] = [
+    [0, 10, 22, "#1AA876"],
+    [0, 50, 22, "#6366F1"],
+    [1, 30, 22, "#F97316"],
+    [2, 20, 18, "#1AA876"],
+    [3, 40, 22, "#6366F1"],
+    [4, 10, 24, "#F97316"],
+    [4, 55, 20, "#1AA876"],
+  ];
+  return (
+    <div className="rounded-md border border-line bg-surface overflow-hidden">
+      <div className="grid grid-cols-5 border-b border-line bg-bg/50">
+        {days.map((d, i) => (
+          <div
+            key={d}
+            className={`px-2 py-1.5 text-center text-[10px] font-bold uppercase tracking-wider ${
+              i === 2 ? "text-primary-strong" : "text-muted"
+            }`}
+          >
+            {d}
+            {i === 2 ? (
+              <span className="block text-[9px] font-normal text-primary">
+                Today
+              </span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <div className="relative grid grid-cols-5 h-[180px] divide-x divide-line/60">
+        {days.map((_, i) => (
+          <div key={i} className={i === 2 ? "bg-primary-soft/25" : "bg-surface"}>
+            {Array.from({ length: 4 }).map((_, r) => (
+              <div
+                key={r}
+                className="border-t border-line/30"
+                style={{ height: "25%" }}
+              />
+            ))}
+          </div>
+        ))}
+        {sessions.map(([d, top, h, color], idx) => (
+          <div
+            key={idx}
+            className="absolute rounded-md bg-surface px-1 py-0.5 overflow-hidden shadow-sm"
+            style={{
+              left: `calc(${d * 20}% + 4px)`,
+              width: `calc(20% - 8px)`,
+              top: `${top}%`,
+              height: `${h}%`,
+              borderLeft: `2px solid ${color}`,
+              backgroundImage: `linear-gradient(180deg, ${color}1A 0%, transparent 80%)`,
+            }}
+          >
+            <p className="text-[8px] font-bold tabular-nums text-ink">
+              4:00
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---- Make-ups mock ---- */
+function PageMockMakeups() {
+  return (
+    <div className="space-y-3">
+      <MakeupSection
+        label="Needs Make-Up"
+        color="border-l-danger"
+        accentBg="bg-danger/8"
+        items={[
+          { name: "Hao Chen", sub: "Absent · May 21", tag: "1 owed" },
+          { name: "Sofia García", sub: "Absent · May 19", tag: "1 owed" },
+        ]}
+      />
+      <MakeupSection
+        label="Pending"
+        color="border-l-warning"
+        accentBg="bg-warning/10"
+        items={[{ name: "Olivia W.", sub: "Offered Fri 5:00 PM", tag: "Awaiting" }]}
+      />
+      <MakeupSection
+        label="Completed"
+        color="border-l-success"
+        accentBg="bg-success-soft"
+        items={[
+          { name: "Liam C.", sub: "Made up May 22", tag: "Done" },
+        ]}
+      />
+    </div>
+  );
+}
+
+function MakeupSection({
+  label,
+  color,
+  accentBg,
+  items,
+}: {
+  label: string;
+  color: string;
+  accentBg: string;
+  items: { name: string; sub: string; tag: string }[];
+}) {
+  return (
+    <div>
+      <p className="text-[9px] font-bold uppercase tracking-wider text-muted mb-1.5">
+        {label}
+      </p>
+      <div className="space-y-1.5">
+        {items.map((it, i) => (
+          <div
+            key={i}
+            className={`flex items-center gap-2 rounded-md border border-line bg-surface border-l-[3px] ${color} px-2.5 py-1.5`}
+          >
+            <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-bold ${accentBg} text-ink/80`}>
+              {it.name.split(" ").map((w) => w[0]).join("").slice(0, 2)}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-medium text-ink truncate">{it.name}</p>
+              <p className="text-[9px] text-muted">{it.sub}</p>
+            </div>
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-muted">
+              {it.tag}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---- Students mock ---- */
+function PageMockStudents() {
+  const rows = [
+    { name: "Ella Johnson", grade: "4th", classes: 2, color: "#1AA876" },
+    { name: "Hao Chen", grade: "5th", classes: 2, color: "#6366F1" },
+    { name: "Veer Patel", grade: "3rd", classes: 1, color: "#F97316" },
+    { name: "Sofia García", grade: "6th", classes: 2, color: "#1AA876" },
+    { name: "Mateo Ramirez", grade: "4th", classes: 2, color: "#6366F1" },
+  ];
+  return (
+    <div className="rounded-md border border-line bg-surface overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-line bg-bg/50">
+        <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-primary-soft text-primary-strong">
+          <Users size={11} />
+        </span>
+        <p className="text-[11px] font-semibold text-ink">47 active students</p>
+        <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary text-[9px] font-bold uppercase tracking-wider text-white">
+          + Add
+        </span>
+      </div>
+      <ul className="divide-y divide-line/60">
+        {rows.map((r) => (
+          <li key={r.name} className="flex items-center gap-2.5 px-3 py-2">
+            <span
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white"
+              style={{ backgroundColor: r.color }}
+            >
+              {r.name.split(" ").map((w) => w[0]).join("")}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-medium text-ink">{r.name}</p>
+              <p className="text-[9px] text-muted">Grade {r.grade}</p>
+            </div>
+            <span className="text-[9px] font-mono tabular-nums text-muted">
+              {r.classes}/2
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/* =========================================================================
+   Reminder showcase — three email snapshots side-by-side so the visitor
+   can see exactly what parents receive.
+========================================================================= */
+function ReminderShowcase() {
+  return (
+    <section className="bg-surface border-y border-line relative overflow-hidden">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-40 -z-0"
+        style={{
+          backgroundImage:
+            "radial-gradient(ellipse 500px 240px at 50% 0%, #D6F4E5, transparent 70%)",
+        }}
+      />
+      <div className="relative max-w-6xl mx-auto px-6 py-24 md:py-28">
+        <div className="text-center mb-14 max-w-2xl mx-auto">
+          <Eyebrow>Parent Reminders</Eyebrow>
+          <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-primary leading-[1.05] tracking-[-0.015em]">
+            What Parents<br />Actually Receive.
+          </h2>
+          <p className="mt-5 text-lg text-ink/70 leading-relaxed">
+            Three email types fire automatically — branded as you, sent from your domain, opted out per student if they ask.
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-5">
+          <ReminderTile title="Class Reminder" color="primary">
+            <ReminderEmailReminder />
+          </ReminderTile>
+          <ReminderTile title="Absence Alert" color="danger">
+            <ReminderEmailAbsent />
+          </ReminderTile>
+          <ReminderTile title="Make-Up Offer" color="accent">
+            <ReminderEmailMakeup />
+          </ReminderTile>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ReminderTile({
+  title,
+  color,
+  children,
+}: {
+  title: string;
+  color: "primary" | "danger" | "accent";
+  children: React.ReactNode;
+}) {
+  const shadow =
+    color === "primary"
+      ? "0 12px 24px -12px rgba(11,104,69,0.30)"
+      : color === "danger"
+      ? "0 12px 24px -12px rgba(239,68,68,0.30)"
+      : "0 12px 24px -12px rgba(249,115,22,0.30)";
+  const dotBg =
+    color === "primary"
+      ? "bg-primary"
+      : color === "danger"
+      ? "bg-danger"
+      : "bg-accent";
+  return (
+    <div>
+      <div
+        className="rounded-xl border border-line bg-surface overflow-hidden transition hover:-translate-y-1"
+        style={{
+          boxShadow: `0 4px 8px rgba(15,23,42,0.06), 0 20px 40px -16px rgba(15,23,42,0.18), ${shadow}`,
+        }}
+      >
+        {children}
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <span aria-hidden className={`h-2 w-2 rounded-full ${dotBg}`} />
+        <p className="text-sm font-bold uppercase tracking-[0.08em] text-primary-strong">
+          {title}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function MiniEmailHeader({ subject }: { subject: string }) {
+  return (
+    <>
+      <div className="px-4 py-2.5 border-b border-line flex items-center gap-2 bg-bg/40">
+        <Mail size={13} className="text-muted" />
+        <p className="text-[10px] text-muted">Inbox</p>
+        <p className="text-[9px] text-muted ml-auto">9:00 AM</p>
+      </div>
+      <div className="px-4 pt-3 pb-2 flex items-center gap-2">
+        <Glyph size={26} dropShadow={false} />
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-semibold text-ink">Spring Valley LC</p>
+          <p className="text-[9px] text-muted truncate">noreply@svlearning.com</p>
+        </div>
+      </div>
+      <p className="px-4 font-display text-[13px] text-primary font-bold leading-tight">
+        {subject}
+      </p>
+    </>
+  );
+}
+
+function ReminderEmailReminder() {
+  return (
+    <>
+      <MiniEmailHeader subject="Reminder: Ella has class today" />
+      <div className="px-4 pt-2 pb-4">
+        <p className="text-[11px] text-ink/80 leading-relaxed mb-2">
+          Hi Olivia, just a reminder that <strong>Ella</strong> has class today.
+        </p>
+        <div
+          className="rounded-md bg-bg/40 px-2.5 py-2 text-[11px]"
+          style={{ borderLeft: "2px solid var(--color-primary)" }}
+        >
+          <p className="font-semibold text-ink">Mon, May 24</p>
+          <p className="font-mono text-ink/80 text-[10px]">4:00 PM – 4:30 PM</p>
+          <p className="text-[9px] text-muted mt-0.5">Early Learning</p>
+        </div>
+        <p className="mt-2 text-[10px] text-muted">— Spring Valley LC</p>
+      </div>
+    </>
+  );
+}
+
+function ReminderEmailAbsent() {
+  return (
+    <>
+      <MiniEmailHeader subject="Ella missed Early Learning today" />
+      <div className="px-4 pt-2 pb-4">
+        <p className="text-[11px] text-ink/80 leading-relaxed mb-2">
+          Hi Olivia, <strong>Ella</strong> was marked absent from today's class:
+        </p>
+        <div
+          className="rounded-md bg-danger/8 px-2.5 py-2 text-[11px]"
+          style={{ borderLeft: "2px solid var(--color-danger)" }}
+        >
+          <p className="font-semibold text-ink">Mon, May 24</p>
+          <p className="font-mono text-ink/80 text-[10px]">4:00 PM</p>
+          <p className="text-[9px] text-muted mt-0.5">Early Learning</p>
+        </div>
+        <p className="mt-2 text-[10px] text-ink/70">
+          Reply or call us to schedule a make-up.
+        </p>
+      </div>
+    </>
+  );
+}
+
+function ReminderEmailMakeup() {
+  return (
+    <>
+      <MiniEmailHeader subject="Make-up class offered for Ella" />
+      <div className="px-4 pt-2 pb-4">
+        <p className="text-[11px] text-ink/80 leading-relaxed mb-2">
+          We'd like to offer <strong>Ella</strong> a make-up class:
+        </p>
+        <div
+          className="rounded-md bg-accent-soft/60 px-2.5 py-2 text-[11px]"
+          style={{ borderLeft: "2px solid var(--color-accent)" }}
+        >
+          <p className="font-semibold text-ink">Fri, May 28</p>
+          <p className="font-mono text-ink/80 text-[10px]">5:00 PM – 5:30 PM</p>
+        </div>
+        <button
+          className="mt-2.5 w-full px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider text-white"
+          style={{
+            backgroundImage:
+              "linear-gradient(180deg, #2BC98A 0%, var(--color-primary) 55%, var(--color-primary-strong) 100%)",
+          }}
+        >
+          Accept Or Decline →
+        </button>
+      </div>
+    </>
   );
 }
