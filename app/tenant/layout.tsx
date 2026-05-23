@@ -10,6 +10,10 @@ import { Logo } from "@/app/_components/Logo";
 import { MobileNav } from "@/app/_components/MobileNav";
 import { UserMenu } from "@/app/_components/UserMenu";
 import { SideNav, type SideNavItem } from "@/app/_components/SideNav";
+import {
+  NotificationBell,
+  type NotificationRow,
+} from "@/app/_components/NotificationBell";
 
 const BASE_NAV: SideNavItem[] = [
   { href: "/tenant", label: "Home", icon: "home" },
@@ -51,19 +55,31 @@ export default async function TenantLayout({
   }
 
   const service = createSupabaseServiceClient();
-  const [{ data: tenant }, { data: branding }] = await Promise.all([
+  const supabase = createSupabaseServerClient();
+  const [
+    { data: tenant },
+    { data: branding },
+    { data: notificationRowsRaw },
+  ] = await Promise.all([
     service.from("tenants").select("name, status").eq("id", user.tenantId).maybeSingle(),
     service
       .from("branding_assets")
       .select("primary_color_hex")
       .eq("tenant_id", user.tenantId)
       .maybeSingle(),
+    // RLS scopes to auth.uid() automatically — safe via user client.
+    supabase
+      .from("notifications")
+      .select("id, type, payload, read_at, created_at")
+      .order("created_at", { ascending: false })
+      .limit(20),
   ]);
+
+  const notifications = (notificationRowsRaw ?? []) as NotificationRow[];
 
   const brandColor = branding?.primary_color_hex ?? "#1AA876";
 
   if (tenant?.status === "suspended") {
-    const supabase = createSupabaseServerClient();
     await supabase.auth.signOut();
     redirect("/login?error=tenant-suspended");
   }
@@ -82,6 +98,7 @@ export default async function TenantLayout({
           <Logo />
         </Link>
         <div className="flex items-center gap-2">
+          <NotificationBell items={notifications} />
           <UserMenu
             fullName={user.fullName || ""}
             email={user.email}
@@ -113,10 +130,11 @@ export default async function TenantLayout({
 
       {/* Sidebar (md+) */}
       <aside className="hidden md:flex md:h-screen md:sticky md:top-0 md:flex-col md:border-r md:border-line/70 md:bg-surface/85 md:backdrop-blur-md md:shadow-[1px_0_0_rgba(255,255,255,0.7)_inset,8px_0_24px_-16px_rgba(15,23,42,0.10)]">
-        <div className="flex items-center gap-2 border-b border-line/70 px-4 py-4">
+        <div className="flex items-center justify-between gap-2 border-b border-line/70 px-4 py-4">
           <Link href="/tenant" className="shrink-0">
             <Logo />
           </Link>
+          <NotificationBell items={notifications} />
         </div>
         {tenant?.name ? (
           <div className="px-4 pt-3">
