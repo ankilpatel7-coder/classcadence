@@ -8,8 +8,6 @@ import {
   Palette,
   ChevronRight,
   Check,
-  Play,
-  Send,
   Mail,
   Calendar,
   ShieldCheck,
@@ -31,7 +29,6 @@ export default function HomePage() {
       <Features />
       <ParentComms />
       <HowItWorks />
-      <VideoTour />
       <Stats />
       <CTAStrip />
       <Footer />
@@ -83,7 +80,6 @@ function Nav() {
         <nav className="hidden md:flex items-center gap-8 text-sm text-ink/75">
           <Link href="#features" className="hover:text-primary transition-colors">Features</Link>
           <Link href="#how" className="hover:text-primary transition-colors">How it works</Link>
-          <Link href="#pricing" className="hover:text-primary transition-colors">Pricing</Link>
           <Link href="/login" className="hover:text-primary transition-colors">Sign in</Link>
           <Link
             href="/signup"
@@ -111,7 +107,7 @@ function Hero() {
     <section className="relative max-w-6xl mx-auto px-6 pt-16 md:pt-24 pb-12 text-center">
       <div className="inline-flex items-center gap-2 px-3 py-1 mb-7 rounded-full bg-primary-soft text-primary text-[11px] font-semibold tracking-wide">
         <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-        Early access · Built for US learning centers
+        Built for US supplemental learning centers
       </div>
       <h1 className="font-display text-5xl md:text-7xl font-semibold text-primary leading-[1.05]">
         The rhythm of every
@@ -119,7 +115,7 @@ function Hero() {
         great learning center.
       </h1>
       <p className="mt-7 text-lg md:text-xl text-ink/70 max-w-2xl mx-auto leading-relaxed">
-        The calm operations platform for multi-location supplemental learning centers. Schedules, attendance, make-ups, and parent communications — handled.
+        Daily check-ins, automatic absence detection, and parent email reminders — all in one calm dashboard, ready the evening you sign up.
       </p>
 
       <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -127,20 +123,19 @@ function Hero() {
           href="/signup"
           className="group inline-flex items-center gap-2 px-7 py-3.5 rounded-md bg-accent text-white font-medium shadow-card hover:bg-accent/90 hover:shadow-pop transition-all"
         >
-          Get started free
+          Start free
           <ChevronRight size={18} className="group-hover:translate-x-0.5 transition-transform" />
         </Link>
         <Link
-          href="#tour"
+          href="/login"
           className="group inline-flex items-center gap-2 px-7 py-3.5 rounded-md border border-line bg-surface text-primary font-medium hover:bg-primary-soft hover:border-primary/30 transition-colors"
         >
-          <Play size={16} className="text-accent" />
-          Watch the 2-minute tour
+          Sign in
         </Link>
       </div>
 
       <p className="mt-6 text-sm text-muted">
-        No credit card required · 30-day guided onboarding · Cancel anytime
+        No credit card required · Cancel anytime
       </p>
 
       <TodayMockup />
@@ -156,10 +151,10 @@ function TrustStrip() {
     <section className="border-y border-line/60 bg-surface">
       <div className="max-w-6xl mx-auto px-6 py-10">
         <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-14 text-center md:text-left">
-          <TrustBlock label="Designed for" body="Weekly worksheets · two-day-a-week practice" />
+          <TrustBlock label="Designed for" body="Worksheet-based learning · two-day weekly schedules" />
           <Divider />
           <TrustBlock
-            label="Compliance"
+            label="Built with"
             body={
               <span className="flex items-center gap-4 text-sm text-ink/75">
                 <span className="inline-flex items-center gap-1.5">
@@ -174,7 +169,7 @@ function TrustStrip() {
             }
           />
           <Divider />
-          <TrustBlock label="Reminder channels" body="Email · WhatsApp · in-app" />
+          <TrustBlock label="Reminders" body="Parent email · in-app dashboard" />
         </div>
       </div>
     </section>
@@ -208,40 +203,40 @@ function Features() {
           Everything your center runs on. In one place.
         </h2>
         <p className="mt-5 text-lg text-ink/70 leading-relaxed">
-          From a parent's first phone call to a child's last worksheet — every step accounted for.
+          Built to replace the clipboard, the group text, and the spreadsheet — without replacing the human touch that keeps families coming back.
         </p>
       </div>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
         <FeatureCard
           Icon={Clock}
-          title="Effortless check-in"
-          body="One tap to check students in. One tap to check them out. The clipboard goes away on day one."
+          title="One-tap check-in"
+          body="Open Today, see who's expected, check students in with a single tap. A live timer counts the minutes they've been on-site. Check out the same way."
         />
         <FeatureCard
           Icon={Users}
-          title="Family-aware enrollment"
-          body="Households group siblings under a single parent thread. Register a sibling in one click — no retyping contact details."
+          title="Student-first records"
+          body="Parent contact info lives directly on the student. No separate household table to maintain. Add a sibling in seconds — each carries their own enrollment, attendance, and notes."
         />
         <FeatureCard
           Icon={AlertCircle}
           title="Automatic absence detection"
-          body="No-shows surface automatically. You decide whether to offer a make-up. Parents confirm with one tap."
+          body="When a session ends and a student never showed, the system marks them absent and notifies the parent — without anyone having to remember."
         />
         <FeatureCard
-          Icon={MessageSquare}
-          title="Email & WhatsApp reminders"
-          body="Sent automatically in each location's timezone. Same-day, day-before, missed-class — all handled."
+          Icon={Mail}
+          title="Automatic parent email"
+          body="Enrollment confirmations, day-of class reminders, absence alerts, and make-up offers. Each sent from your branded sender. Per-parent opt-out respected."
         />
         <FeatureCard
           Icon={Building2}
-          title="Multi-location operations"
-          body="Add a second center with its own hours, classrooms, and team. Each stays separate. You stay in command."
+          title="Multi-location ready"
+          body="Add a second center with its own hours, classrooms, and team. Each location keeps its own timezone and schedule. Tenant admins see everything; staff see just their own."
         />
         <FeatureCard
           Icon={Palette}
           title="Your brand, end to end"
-          body="Logo, primary color, sender name, email signature. Parents see you — not us — in every message."
+          body="Your logo, your primary color, your sender name and address. Parents see your center in every email and every page — never our name."
         />
       </div>
     </section>
@@ -257,24 +252,24 @@ function ParentComms() {
       <div className="max-w-6xl mx-auto px-6 py-24 md:py-28">
         <div className="grid md:grid-cols-2 gap-12 md:gap-20 items-center">
           <div>
-            <Eyebrow>Communications</Eyebrow>
+            <Eyebrow>Stay in sync</Eyebrow>
             <h2 className="mt-3 font-display text-4xl md:text-5xl font-semibold text-primary leading-tight">
-              Reach every parent on the channel they read.
+              Parents stay informed. You stay focused.
             </h2>
             <p className="mt-6 text-lg text-ink/70 leading-relaxed">
-              Email reminders work — until they don't. ClassCadence sends the same message on WhatsApp too, so parents see it in the place they actually check.
+              Every reminder, absence alert, and make-up offer is sent automatically — branded as you. The same events surface in your in-app bell, so you can see at a glance what just happened.
             </p>
             <ul className="mt-8 space-y-3 text-ink/80">
-              <FeatureBullet>Dispatched in each location's local time</FeatureBullet>
-              <FeatureBullet>Pre-approved WhatsApp templates (Utility-priced)</FeatureBullet>
-              <FeatureBullet>One-tap accept or decline on make-up offers</FeatureBullet>
-              <FeatureBullet>Per-household channel preferences honored</FeatureBullet>
+              <FeatureBullet>Day-of reminders go out each morning automatically</FeatureBullet>
+              <FeatureBullet>Marked absent? Parent gets an email instantly, and you see it on your dashboard</FeatureBullet>
+              <FeatureBullet>Make-up offers include a one-tap accept/decline link for parents</FeatureBullet>
+              <FeatureBullet>Per-student email opt-out honored, no extra config</FeatureBullet>
             </ul>
           </div>
 
           <div className="space-y-5">
-            <WhatsAppMockup />
             <EmailMockup />
+            <BellMockup />
           </div>
         </div>
       </div>
@@ -307,13 +302,13 @@ function HowItWorks() {
       </div>
 
       <div className="grid md:grid-cols-3 gap-6">
-        <StepCard n={1} title="Set up your center" body="Add operating hours, classrooms, and time slots. Upload your logo. Invite your team.">
+        <StepCard n={1} title="Set up your center" body="Add operating hours, classrooms, and weekly time slots. Upload your logo and pick your brand color. Invite your team.">
           <StepMockSchedule />
         </StepCard>
-        <StepCard n={2} title="Move students over" body="Import students and households from a CSV — or add them one at a time at the desk.">
+        <StepCard n={2} title="Add your students" body="Enter each student once — parent contact info lives right on the record. Assign them to a classroom and time slot. Their parent gets a confirmation email automatically.">
           <StepMockImport />
         </StepCard>
-        <StepCard n={3} title="Run calmer" body="Reminders dispatch automatically. Check-ins happen with a tap. Make-ups stop slipping through the cracks.">
+        <StepCard n={3} title="Run calmer" body="The Today page opens to the next session. Check-ins are one tap. Reminders fire each morning. Make-ups never slip through the cracks.">
           <StepMockReminder />
         </StepCard>
       </div>
@@ -349,48 +344,17 @@ function StepCard({
 }
 
 /* =========================================================================
-   Video tour
-========================================================================= */
-function VideoTour() {
-  return (
-    <section id="tour" className="bg-surface border-y border-line">
-      <div className="max-w-5xl mx-auto px-6 py-24 md:py-28 text-center">
-        <Eyebrow>Product tour</Eyebrow>
-        <h2 className="mt-3 font-display text-4xl md:text-5xl font-semibold text-primary leading-tight">
-          See a full day at the front desk, in two minutes.
-        </h2>
-        <p className="mt-5 text-lg text-ink/70 max-w-xl mx-auto leading-relaxed">
-          From the 4 PM check-in rush to the next-day make-up follow-up — every core workflow in one walkthrough.
-        </p>
-
-        <div className="mt-12 relative mx-auto max-w-3xl aspect-video rounded-xl border border-line shadow-pop overflow-hidden bg-gradient-to-br from-primary to-primary-strong">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <button className="group w-20 h-20 rounded-full bg-white/95 hover:bg-white shadow-pop transition-all hover:scale-105 flex items-center justify-center">
-              <Play size={28} className="text-primary ml-1.5" fill="#1E3A8A" />
-            </button>
-          </div>
-          <div className="absolute bottom-4 left-4 px-3 py-1.5 rounded-md bg-black/40 backdrop-blur-sm text-white text-xs font-medium">
-            2:14 · Product walkthrough
-          </div>
-          <div className="absolute top-4 right-4 px-2.5 py-1 rounded-md bg-accent text-white text-[10px] font-semibold uppercase tracking-wide">
-            Coming soon
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* =========================================================================
    Stats
 ========================================================================= */
 function Stats() {
   return (
-    <section className="max-w-6xl mx-auto px-6 py-24">
-      <div className="grid md:grid-cols-3 gap-10 text-center">
-        <Stat figure="< 2s" label="Average check-in time" />
-        <Stat figure="2" label="Reminder channels (email + WhatsApp)" />
-        <Stat figure="0" label="Paper forms required" />
+    <section className="bg-surface border-y border-line">
+      <div className="max-w-6xl mx-auto px-6 py-20">
+        <div className="grid md:grid-cols-3 gap-10 text-center">
+          <Stat figure="One tap" label="To check a student in. No paper, no clipboard." />
+          <Stat figure="Automatic" label="Absence detection — no admin has to remember." />
+          <Stat figure="One evening" label="From signing up to the first real check-in." />
+        </div>
       </div>
     </section>
   );
@@ -399,10 +363,10 @@ function Stats() {
 function Stat({ figure, label }: { figure: string; label: string }) {
   return (
     <div>
-      <p className="font-display text-5xl md:text-6xl text-primary font-semibold">
+      <p className="font-display text-4xl md:text-5xl text-primary font-semibold tracking-tight">
         {figure}
       </p>
-      <p className="mt-3 text-ink/70 text-[15px]">{label}</p>
+      <p className="mt-3 text-ink/70 text-[15px] leading-relaxed max-w-xs mx-auto">{label}</p>
     </div>
   );
 }
@@ -418,14 +382,14 @@ function CTAStrip() {
           Run your center calmer, starting tonight.
         </h2>
         <p className="mt-5 text-lg text-primary-soft/90 max-w-xl mx-auto leading-relaxed">
-          Set up your location, import your students, and welcome the first check-in. Most centers are live in a single evening.
+          Set up your location, add your students, and welcome the first check-in — all in a single evening. Cancel any time.
         </p>
         <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
             href="/signup"
             className="inline-flex items-center gap-2 px-8 py-4 bg-accent rounded-md font-medium hover:bg-accent/90 transition-colors shadow-pop"
           >
-            Get started free
+            Start free
             <ChevronRight size={18} />
           </Link>
           <Link
@@ -437,8 +401,8 @@ function CTAStrip() {
         </div>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-primary-soft/80">
           <span className="inline-flex items-center gap-1.5"><Check size={14} /> No credit card</span>
-          <span className="inline-flex items-center gap-1.5"><Check size={14} /> 30-day onboarding</span>
-          <span className="inline-flex items-center gap-1.5"><Check size={14} /> COPPA-respecting</span>
+          <span className="inline-flex items-center gap-1.5"><Check size={14} /> Cancel anytime</span>
+          <span className="inline-flex items-center gap-1.5"><Check size={14} /> COPPA-aware</span>
         </div>
       </div>
     </section>
@@ -452,8 +416,8 @@ function Footer() {
   return (
     <footer className="bg-bg border-t border-line">
       <div className="max-w-6xl mx-auto px-6 py-14">
-        <div className="grid md:grid-cols-5 gap-10">
-          <div className="md:col-span-2">
+        <div className="grid md:grid-cols-3 gap-10">
+          <div>
             <div className="flex items-center gap-2.5 mb-4">
               <Glyph size={22} />
               <span className="font-wordmark text-lg text-primary font-semibold">
@@ -461,31 +425,22 @@ function Footer() {
               </span>
             </div>
             <p className="text-sm text-muted leading-relaxed max-w-xs">
-              The rhythm of every great learning center. Multi-tenant student management for supplemental learning centers.
+              The student-management platform for US supplemental learning centers. Daily check-ins, automatic absence detection, parent email reminders.
             </p>
           </div>
           <FooterCol title="Product" links={[
             ["Features", "#features"],
             ["How it works", "#how"],
-            ["Pricing", "#pricing"],
-            ["Changelog", "#"],
+            ["Sign in", "/login"],
+            ["Start free", "/signup"],
           ]} />
-          <FooterCol title="Company" links={[
-            ["About", "#"],
-            ["Contact", "#"],
-            ["Careers", "#"],
-            ["Press", "#"],
-          ]} />
-          <FooterCol title="Legal" links={[
-            ["Privacy", "#"],
-            ["Terms", "#"],
-            ["COPPA", "#"],
-            ["Security", "#"],
+          <FooterCol title="Get in touch" links={[
+            ["Contact", "mailto:hello@tryclasscadence.com"],
           ]} />
         </div>
         <div className="mt-14 pt-6 border-t border-line text-sm text-muted flex flex-col md:flex-row justify-between items-center gap-3">
-          <p>© 2026 ClassCadence. All rights reserved.</p>
-          <p>Made for centers, by people who've worked the front desk.</p>
+          <p>© {new Date().getFullYear()} ClassCadence. All rights reserved.</p>
+          <p>Made for centers, by people who&apos;ve worked the front desk.</p>
         </div>
       </div>
     </footer>
@@ -625,49 +580,85 @@ function StudentRow({
 }
 
 /* =========================================================================
-   WhatsApp mockup
+   Bell / in-app notification mockup
 ========================================================================= */
-function WhatsAppMockup() {
+function BellMockup() {
   return (
-    <div className="bg-[#ECE5DD] rounded-xl shadow-card overflow-hidden border border-line max-w-md">
-      <div className="bg-[#075E54] text-white px-4 py-3 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center">
-          <Glyph size={20} />
+    <div className="bg-surface rounded-xl shadow-card border border-line overflow-hidden max-w-md ml-auto">
+      <div className="px-5 py-3.5 border-b border-line flex items-center gap-2.5">
+        <div className="relative inline-flex h-8 w-8 items-center justify-center rounded-full bg-bg/70 ring-1 ring-inset ring-line/70 text-ink/70">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+            <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+          </svg>
+          <span className="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-danger px-1 text-[9px] font-bold text-white ring-2 ring-surface">
+            3
+          </span>
         </div>
-        <div className="flex-1">
-          <p className="text-sm font-semibold">Pflugerville Learning Center</p>
-          <p className="text-[11px] text-white/80">via WhatsApp Business</p>
-        </div>
-        <span className="text-[10px] uppercase tracking-wider bg-white/15 px-2 py-0.5 rounded">
-          Today
-        </span>
+        <p className="flex-1 text-sm font-semibold text-ink">Notifications</p>
+        <p className="text-[10px] text-muted">Just now</p>
       </div>
-      <div className="px-4 py-5 space-y-3">
-        <div className="max-w-[85%] bg-white rounded-lg rounded-tl-sm p-3 shadow-sm">
-          <p className="text-[13px] text-ink leading-relaxed">
-            Hi Meera 👋 Reminder that <strong>Aditya</strong> has class today at <strong>4:00 PM</strong> in the EL Room. See you soon — Pflugerville Learning Center.
-          </p>
-          <p className="text-[10px] text-muted mt-1.5 text-right">9:00 AM ✓✓</p>
-        </div>
-        <div className="max-w-[85%] bg-white rounded-lg rounded-tl-sm p-3 shadow-sm">
-          <p className="text-[13px] text-ink leading-relaxed mb-2">
-            Aditya missed today's class. We've held a make-up on <strong>Thursday, May 23 at 4:00 PM</strong>. Tap to confirm:
-          </p>
-          <button className="text-[13px] font-medium text-primary bg-primary-soft px-3 py-2 rounded-md w-full text-left">
-            ✓ Confirm make-up class
-          </button>
-          <p className="text-[10px] text-muted mt-2 text-right">5:32 PM ✓✓</p>
-        </div>
-      </div>
-      <div className="px-4 py-3 bg-[#F0F0F0] border-t border-black/5 flex items-center gap-2">
-        <div className="flex-1 bg-white rounded-full px-4 py-2 text-xs text-muted">
-          Type a message
-        </div>
-        <button className="w-9 h-9 rounded-full bg-[#075E54] flex items-center justify-center text-white">
-          <Send size={14} />
-        </button>
-      </div>
+      <ul className="divide-y divide-line/60">
+        <NotifRow
+          unread
+          title="Ella Johnson enrolled in Early Learning"
+          sub="Mon 4:00 PM"
+          time="2m ago"
+          tone="primary"
+        />
+        <NotifRow
+          unread
+          title="Hao Chen marked absent"
+          sub="Regular Class · 4:00 PM"
+          time="14m ago"
+          tone="danger"
+        />
+        <NotifRow
+          unread
+          title="Make-up offer sent to Olivia"
+          sub="Fri 5:00 PM — awaiting response"
+          time="1h ago"
+          tone="accent"
+        />
+        <NotifRow
+          title="3 sessions today"
+          sub="11 students expected"
+          time="9:00 AM"
+          tone="muted"
+        />
+      </ul>
     </div>
+  );
+}
+
+function NotifRow({
+  unread,
+  title,
+  sub,
+  time,
+  tone,
+}: {
+  unread?: boolean;
+  title: string;
+  sub: string;
+  time: string;
+  tone: "primary" | "danger" | "accent" | "muted";
+}) {
+  const dotColor = {
+    primary: "bg-primary",
+    danger: "bg-danger",
+    accent: "bg-accent",
+    muted: "bg-line",
+  }[tone];
+  return (
+    <li className={`flex items-start gap-2.5 px-4 py-2.5 ${unread ? "bg-primary-soft/20" : ""}`}>
+      <span aria-hidden className={`mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${unread ? dotColor : "bg-line"}`} />
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] leading-snug text-ink">{title}</p>
+        <p className="mt-0.5 text-[11px] text-muted">{sub}</p>
+      </div>
+      <p className="text-[10px] uppercase tracking-wide text-muted shrink-0">{time}</p>
+    </li>
   );
 }
 
@@ -676,11 +667,11 @@ function WhatsAppMockup() {
 ========================================================================= */
 function EmailMockup() {
   return (
-    <div className="bg-surface rounded-xl shadow-card border border-line overflow-hidden max-w-md ml-auto">
+    <div className="bg-surface rounded-xl shadow-card border border-line overflow-hidden max-w-md">
       <div className="px-5 py-3.5 border-b border-line flex items-center gap-3">
         <Mail size={16} className="text-muted" />
-        <p className="text-xs text-muted flex-1">Inbox · Email</p>
-        <p className="text-[11px] text-muted">9:00 AM</p>
+        <p className="text-xs text-muted flex-1">Inbox · Class reminder</p>
+        <p className="text-[11px] text-muted">8:00 AM</p>
       </div>
       <div className="px-5 py-5">
         <div className="flex items-center gap-3 mb-4">
@@ -688,19 +679,25 @@ function EmailMockup() {
             <Glyph size={20} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-ink">Pflugerville Learning Center</p>
-            <p className="text-[11px] text-muted truncate">hello@pflugerville-learning.com → meera.p@gmail.com</p>
+            <p className="text-sm font-semibold text-ink">Spring Valley Learning Center</p>
+            <p className="text-[11px] text-muted truncate">noreply@svlearning.com → o.johnson@gmail.com</p>
           </div>
         </div>
         <p className="font-display text-base text-primary font-semibold mb-1.5">
-          Aditya has class today at 4:00 PM
+          Reminder: Ella has class today
         </p>
-        <p className="text-sm text-ink/80 leading-relaxed">
-          Hi Meera, just a quick reminder that Aditya has class today at <strong>4:00 PM</strong> in the EL Room. Please plan for arrival a few minutes early.
+        <p className="text-sm text-ink/80 leading-relaxed mb-3">
+          Hi Olivia, just a reminder that <strong>Ella</strong> has class today.
         </p>
-        <div className="mt-4 pt-4 border-t border-line text-xs text-muted">
-          You're receiving this because you're enrolled at Pflugerville Learning Center.
+        <div className="rounded-md border border-line bg-bg/40 border-l-[3px] border-l-primary px-3 py-2.5">
+          <p className="text-[13px] text-ink">
+            <strong>Monday, May 24</strong>{" "}
+            <span className="font-mono text-ink/80">4:00 PM – 4:30 PM</span>
+          </p>
+          <p className="text-[11px] text-muted mt-0.5">Early Learning</p>
         </div>
+        <p className="mt-3 text-sm text-ink/80">See you there!</p>
+        <p className="mt-3 text-xs text-muted">— Spring Valley Learning Center</p>
       </div>
     </div>
   );
@@ -738,20 +735,25 @@ function StepMockSchedule() {
 
 function StepMockImport() {
   return (
-    <div className="text-xs">
-      <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-primary-soft text-primary font-medium mb-2">
-        <Users size={14} />
-        <span>households.csv · 47 rows</span>
-        <span className="ml-auto text-[9px] uppercase tracking-[0.18em]">Dry-run</span>
+    <div className="space-y-2 text-xs">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border border-line bg-surface">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-soft text-[9px] font-bold text-primary-strong">EJ</span>
+          <span className="font-medium text-ink">Ella Johnson</span>
+        </div>
+        <span className="text-[10px] uppercase tracking-wider text-muted">4th grade</span>
       </div>
-      <div className="space-y-1.5">
-        <div className="flex justify-between text-[11px] text-ink/70 px-1">
-          <span>✓ 45 ready to import</span>
-          <span className="text-warning">2 need review</span>
-        </div>
-        <div className="h-2 rounded-full bg-bg overflow-hidden">
-          <div className="h-full bg-success w-[95%] rounded-full" />
-        </div>
+      <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-primary-soft/40 text-primary-strong">
+        <Mail size={12} />
+        <span className="font-medium">Parent email</span>
+        <span className="ml-auto font-mono text-[10px]">o.johnson@…</span>
+      </div>
+      <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-bg text-ink/70">
+        <Calendar size={12} className="text-primary" />
+        <span className="font-medium">Mon · 4:00 PM</span>
+        <span className="ml-auto text-[10px] text-success font-semibold inline-flex items-center gap-1">
+          <Check size={10} /> Enrolled
+        </span>
       </div>
     </div>
   );
