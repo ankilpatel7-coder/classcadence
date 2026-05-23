@@ -1,16 +1,19 @@
-// Pure-SVG attendance ratio ring. No deps. Brand-colored gradient.
-// Renders a 200x200 ring with the percentage in the middle.
+// Pure-SVG attendance ratio ring. Percentage sits in the SVG center
+// via absolute positioning over a square aspect-ratio wrapper — no
+// negative margins, no fragile percentage math.
 
 export function AttendanceRing({
   percent,
-  size = 200,
-  stroke = 16,
-  label = "Last 7 days",
+  size = 180,
+  stroke = 14,
+  label,
+  caption,
 }: {
   percent: number; // 0-100
   size?: number;
   stroke?: number;
   label?: string;
+  caption?: string;
 }) {
   const safe = Math.max(0, Math.min(100, Math.round(percent)));
   const radius = (size - stroke) / 2;
@@ -19,14 +22,17 @@ export function AttendanceRing({
   const id = `ringGrad-${safe}`;
 
   return (
-    <div className="flex flex-col items-center justify-center">
+    <div
+      className="relative inline-flex items-center justify-center"
+      style={{ width: size, height: size }}
+    >
       <svg
         width={size}
         height={size}
         viewBox={`0 0 ${size} ${size}`}
-        className="-rotate-90"
+        className="absolute inset-0 -rotate-90"
         role="img"
-        aria-label={`${label}: ${safe}% attendance`}
+        aria-label={`${safe}% attendance`}
       >
         <defs>
           <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
@@ -35,17 +41,15 @@ export function AttendanceRing({
             <stop offset="100%" stopColor="var(--color-primary-strong)" />
           </linearGradient>
         </defs>
-        {/* track */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
           stroke="var(--color-border)"
-          strokeOpacity="0.6"
+          strokeOpacity="0.45"
           strokeWidth={stroke}
         />
-        {/* progress */}
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -56,14 +60,22 @@ export function AttendanceRing({
           strokeLinecap="round"
           strokeDasharray={circ}
           strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset 600ms ease-out" }}
+          style={{ transition: "stroke-dashoffset 700ms cubic-bezier(0.22, 0.61, 0.36, 1)" }}
         />
       </svg>
-      <div className="-mt-[60%] flex flex-col items-center">
-        <p className="text-4xl font-bold tabular-nums text-ink">{safe}%</p>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
-          {label}
+      <div className="relative z-10 flex flex-col items-center">
+        <p className="text-[44px] font-bold leading-none tabular-nums text-ink">
+          {safe}
+          <span className="text-2xl font-semibold text-muted">%</span>
         </p>
+        {label ? (
+          <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+            {label}
+          </p>
+        ) : null}
+        {caption ? (
+          <p className="mt-0.5 text-[11px] tabular-nums text-muted">{caption}</p>
+        ) : null}
       </div>
     </div>
   );

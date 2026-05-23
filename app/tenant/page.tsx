@@ -171,7 +171,9 @@ export default async function TenantHomePage({
         </div>
       ) : null}
 
-      {/* KPI tiles */}
+      {/* KPI tiles — unified neutral surface, accent only via the icon
+          medallion + top hairline. Reads as one family rather than four
+          competing colors. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <KpiTile
           label="Active students"
@@ -202,22 +204,37 @@ export default async function TenantHomePage({
         />
       </div>
 
-      {/* Middle row: attendance ring + weekly bars + recent absences */}
+      {/* Middle row: attendance ring + weekly bars */}
       <div className="grid gap-3 lg:grid-cols-3">
         {/* Ring */}
         <section className="panel relative overflow-hidden p-5">
-          <SectionHeader title="Attendance ratio" hint="Last 7 days" />
-          <div className="mt-3 flex items-center justify-center py-2">
-            <AttendanceRing percent={attendanceRatio} />
+          <SectionHeader title="Attendance" hint="Last 7 days" />
+          <div className="mt-5 flex items-center justify-center">
+            <AttendanceRing
+              percent={attendanceRatio}
+              caption={
+                last7dDecided > 0
+                  ? `${last7dPresent} of ${last7dDecided}`
+                  : "no data"
+              }
+            />
           </div>
-          <div className="mt-2 flex items-center justify-around text-center text-[11px]">
+          <div className="mt-5 grid grid-cols-2 gap-2 border-t border-line/60 pt-4 text-center">
             <div>
-              <p className="font-semibold text-success">{last7dPresent}</p>
-              <p className="text-muted">Present</p>
+              <p className="text-xl font-bold tabular-nums text-success">
+                {last7dPresent}
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+                Present
+              </p>
             </div>
             <div>
-              <p className="font-semibold text-danger">{last7dAbsent}</p>
-              <p className="text-muted">Absent</p>
+              <p className="text-xl font-bold tabular-nums text-danger">
+                {last7dAbsent}
+              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+                Absent
+              </p>
             </div>
           </div>
         </section>
@@ -225,7 +242,7 @@ export default async function TenantHomePage({
         {/* Weekly bars */}
         <section className="panel p-5 lg:col-span-2">
           <SectionHeader title="Weekly attendance" hint="Last 4 weeks" />
-          <div className="mt-4">
+          <div className="mt-2">
             <WeeklyBars weeks={weekBars} />
           </div>
         </section>
@@ -240,7 +257,7 @@ export default async function TenantHomePage({
             action={
               <Link
                 href="/tenant/makeups"
-                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary transition hover:gap-1.5 hover:underline"
               >
                 Offer make-ups
                 <ArrowUpRight className="h-3 w-3" />
@@ -271,7 +288,7 @@ export default async function TenantHomePage({
                   <li key={a.id}>
                     <Link
                       href={`/tenant/students/${a.student_id}/edit`}
-                      className="flex items-center gap-3 py-2.5 transition hover:bg-bg/40"
+                      className="group flex items-center gap-3 rounded-md px-2 py-2.5 -mx-2 transition hover:bg-primary-soft/20"
                     >
                       <StudentAvatar name={fullName} size={32} />
                       <div className="min-w-0 flex-1">
@@ -279,10 +296,14 @@ export default async function TenantHomePage({
                           {fullName}
                         </p>
                         <p className="text-[11px] text-muted">
-                          {a.sessions.time_slots.classrooms.name} · {date}
+                          <span className="font-medium text-ink/60">
+                            {a.sessions.time_slots.classrooms.name}
+                          </span>
+                          <span className="mx-1.5">·</span>
+                          <span className="tabular-nums">{date}</span>
                         </p>
                       </div>
-                      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted" />
+                      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted transition group-hover:text-primary" />
                     </Link>
                   </li>
                 );
@@ -292,9 +313,9 @@ export default async function TenantHomePage({
         </section>
 
         {/* Quick actions */}
-        <section className="panel p-5">
+        <section className="panel flex flex-col p-5">
           <SectionHeader title="Quick actions" />
-          <div className="mt-3 flex flex-col gap-2">
+          <div className="mt-3 flex flex-1 flex-col gap-2">
             <SendRemindersButton />
             <Link
               href="/tenant/students/new"
@@ -311,7 +332,7 @@ export default async function TenantHomePage({
               Open Today
             </Link>
           </div>
-          <p className="mt-3 text-[11px] leading-relaxed text-muted">
+          <p className="mt-4 text-[11px] leading-relaxed text-muted">
             Reminders go to every expected student's parent for sessions in
             the next 18 hours. Skips anyone who's opted out.
           </p>
@@ -325,7 +346,7 @@ export default async function TenantHomePage({
           action={
             <Link
               href="/tenant/locations/new"
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary transition hover:gap-1.5 hover:underline"
             >
               <Plus className="h-3 w-3" />
               Add another
@@ -337,10 +358,12 @@ export default async function TenantHomePage({
             <li key={l.id}>
               <Link
                 href={`/tenant/locations/${l.id}/edit`}
-                className="flex items-center justify-between rounded-md border border-line bg-surface px-3 py-2.5 shadow-card transition hover:bg-bg/40"
+                className="group flex items-center justify-between rounded-md border border-line bg-surface px-3 py-2.5 shadow-card transition hover:-translate-y-px hover:border-primary/30 hover:bg-bg/40 hover:shadow-lift"
               >
                 <div className="flex items-center gap-2.5">
-                  <MapPin className="h-3.5 w-3.5 text-muted" />
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-primary-soft text-primary-strong">
+                    <MapPin className="h-3.5 w-3.5" />
+                  </span>
                   <div>
                     <p className="text-sm font-medium text-ink">{l.name}</p>
                     <p className="text-[11px] text-muted">
@@ -396,13 +419,13 @@ function SectionHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <div>
+    <div className="flex items-baseline justify-between gap-3">
+      <div className="flex items-baseline gap-2">
         <h2 className="text-sm font-semibold text-ink">{title}</h2>
         {hint ? (
-          <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-muted">
-            {hint}
-          </p>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+            · {hint}
+          </span>
         ) : null}
       </div>
       {action ? <div>{action}</div> : null}
@@ -412,27 +435,27 @@ function SectionHeader({
 
 const TONE_STYLES: Record<
   string,
-  { bg: string; accent: string; iconClass: string }
+  { accent: string; medallionBg: string; medallionText: string }
 > = {
   primary: {
-    bg: "from-primary-soft/40 to-primary-soft/15",
     accent: "bg-primary",
-    iconClass: "text-primary-strong",
+    medallionBg: "bg-primary-soft",
+    medallionText: "text-primary-strong",
   },
   indigo: {
-    bg: "from-[#E0E7FF]/50 to-[#E0E7FF]/15",
     accent: "bg-[#6366F1]",
-    iconClass: "text-[#4338CA]",
+    medallionBg: "bg-[#E0E7FF]",
+    medallionText: "text-[#4338CA]",
   },
   accent: {
-    bg: "from-accent-soft/60 to-accent-soft/15",
     accent: "bg-accent",
-    iconClass: "text-accent",
+    medallionBg: "bg-accent-soft",
+    medallionText: "text-accent",
   },
   danger: {
-    bg: "from-danger/10 to-danger/5",
     accent: "bg-danger",
-    iconClass: "text-danger",
+    medallionBg: "bg-danger/10",
+    medallionText: "text-danger",
   },
 };
 
@@ -451,20 +474,23 @@ function KpiTile({
 }) {
   const styles = TONE_STYLES[tone] ?? TONE_STYLES.primary;
   const body = (
-    <div
-      className={`relative overflow-hidden rounded-xl border border-line bg-gradient-to-br ${styles.bg} p-4 shadow-card transition hover:-translate-y-px hover:shadow-lift`}
-    >
+    <div className="group relative overflow-hidden rounded-xl border border-line bg-surface p-4 shadow-card transition hover:-translate-y-px hover:border-line/0 hover:shadow-lift">
       <span
         aria-hidden
-        className={`absolute inset-x-0 top-0 h-1 ${styles.accent}`}
+        className={`absolute inset-x-0 top-0 h-[3px] ${styles.accent}`}
       />
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
           {label}
         </p>
-        <Icon className={`h-4 w-4 ${styles.iconClass} opacity-80`} />
+        <span
+          aria-hidden
+          className={`inline-flex h-7 w-7 items-center justify-center rounded-lg ${styles.medallionBg} ${styles.medallionText} transition group-hover:scale-105`}
+        >
+          <Icon className="h-3.5 w-3.5" />
+        </span>
       </div>
-      <p className="mt-1.5 text-3xl font-bold tracking-tight tabular-nums text-ink">
+      <p className="mt-2.5 text-[32px] font-bold leading-none tracking-tight tabular-nums text-ink">
         {value}
       </p>
     </div>
