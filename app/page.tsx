@@ -17,24 +17,40 @@ import {
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-bg relative overflow-hidden">
-      {/* Layered background — emerald wash top-center, accent peach bottom-right,
-          plus a soft sky-blue blob mid-left. Three colors instead of one so the
-          page reads as alive even before any content lands on it. */}
+    <main
+      className="min-h-screen text-white relative overflow-hidden"
+      style={{
+        backgroundColor: "#0A0E1A",
+        backgroundImage:
+          "radial-gradient(ellipse at 50% -100px, rgba(26,168,118,0.15), transparent 50%), radial-gradient(ellipse at 0% 30%, rgba(99,102,241,0.12), transparent 50%), radial-gradient(ellipse at 100% 60%, rgba(249,115,22,0.10), transparent 50%)",
+      }}
+    >
+      {/* Grain layer adds the subtle texture that separates "dark site" from
+          "classy dark site." 1% opacity SVG noise. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute top-[-120px] left-1/2 -translate-x-1/2 w-[1200px] h-[700px] opacity-60 blur-3xl -z-10"
-        style={{ background: "radial-gradient(closest-side, #D6F4E5, transparent)" }}
+        className="pointer-events-none absolute inset-0 opacity-[0.025] mix-blend-overlay -z-10"
+        style={{
+          backgroundImage:
+            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' /></filter><rect width='100%' height='100%' filter='url(%23n)' /></svg>\")",
+        }}
+      />
+      {/* Glowing color washes — bigger and brighter than light-theme version so
+          they push through the dark base. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[-200px] left-1/2 -translate-x-1/2 w-[1400px] h-[800px] opacity-60 blur-3xl -z-10"
+        style={{ background: "radial-gradient(closest-side, rgba(26,168,118,0.35), transparent)" }}
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute top-[280px] -left-[160px] w-[640px] h-[640px] opacity-40 blur-3xl -z-10"
-        style={{ background: "radial-gradient(closest-side, #DBEAFE, transparent)" }}
+        className="pointer-events-none absolute top-[400px] -left-[200px] w-[700px] h-[700px] opacity-50 blur-3xl -z-10"
+        style={{ background: "radial-gradient(closest-side, rgba(99,102,241,0.30), transparent)" }}
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute top-[1100px] -right-[160px] w-[640px] h-[640px] opacity-50 blur-3xl -z-10"
-        style={{ background: "radial-gradient(closest-side, #FFEDD5, transparent)" }}
+        className="pointer-events-none absolute top-[1300px] -right-[200px] w-[700px] h-[700px] opacity-50 blur-3xl -z-10"
+        style={{ background: "radial-gradient(closest-side, rgba(249,115,22,0.22), transparent)" }}
       />
 
       <Nav />
@@ -106,37 +122,42 @@ function Eyebrow({
 ========================================================================= */
 function Nav() {
   return (
-    <header className="relative sticky top-0 z-30 backdrop-blur-md bg-surface/80 border-b border-line/60">
+    <header className="relative sticky top-0 z-30 backdrop-blur-xl bg-[#0A0E1A]/70 border-b border-white/[0.08]">
       <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <Glyph size={32} />
-          <span className="font-wordmark text-xl text-primary font-semibold tracking-tight">
+          <span className="font-wordmark text-xl text-white font-semibold tracking-tight">
             ClassCadence
           </span>
         </div>
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-ink/75">
-          <Link href="#features" className="hover:text-primary transition-colors">Features</Link>
-          <Link href="#how" className="hover:text-primary transition-colors">How it works</Link>
-          <Link href="/login" className="hover:text-primary transition-colors">Sign in</Link>
+        <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-white/70">
+          <Link href="#features" className="hover:text-white transition-colors">Features</Link>
+          <Link href="#how" className="hover:text-white transition-colors">How it works</Link>
+          <Link href="/login" className="hover:text-white transition-colors">Sign in</Link>
           <Link
             href="/signup"
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-white font-medium text-[13px] transition hover:-translate-y-px"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-white font-semibold uppercase tracking-[0.08em] text-[11px] transition hover:-translate-y-px"
             style={{
               backgroundImage:
-                "linear-gradient(180deg, #2BC98A 0%, var(--color-primary) 55%, var(--color-primary-strong) 100%)",
+                "linear-gradient(180deg, #2BC98A 0%, #1AA876 55%, #0B6845 100%)",
               boxShadow:
-                "0 2px 4px rgba(15,23,42,0.1), 0 8px 18px -8px rgba(11,104,69,0.4), inset 0 1px 0 rgba(255,255,255,0.4)",
+                "0 2px 4px rgba(0,0,0,0.3), 0 0 24px -4px rgba(26,168,118,0.55), inset 0 1px 0 rgba(255,255,255,0.25)",
             }}
           >
-            Start free
+            Start Free
             <ChevronRight size={14} />
           </Link>
         </nav>
         <Link
           href="/signup"
-          className="md:hidden px-4 py-2 bg-primary text-white rounded-md text-sm font-medium shadow-emboss"
+          className="md:hidden px-4 py-2 rounded-md text-white text-sm font-semibold"
+          style={{
+            backgroundImage:
+              "linear-gradient(180deg, #2BC98A 0%, #1AA876 55%, #0B6845 100%)",
+            boxShadow: "0 0 24px -4px rgba(26,168,118,0.55)",
+          }}
         >
-          Start free
+          Start Free
         </Link>
       </div>
     </header>
@@ -150,31 +171,31 @@ function Hero() {
   return (
     <section className="relative max-w-6xl mx-auto px-6 pt-16 md:pt-24 pb-12 text-center">
       <div
-        className="inline-flex items-center gap-2 px-3.5 py-1.5 mb-7 rounded-full text-[11px] font-bold tracking-[0.12em] uppercase text-primary-strong"
+        className="inline-flex items-center gap-2 px-3.5 py-1.5 mb-7 rounded-full text-[11px] font-bold tracking-[0.12em] uppercase text-white/90 ring-1 ring-inset ring-white/15"
         style={{
-          backgroundImage:
-            "linear-gradient(180deg, #FFFFFF 0%, var(--color-primary-soft) 100%)",
+          background:
+            "linear-gradient(180deg, rgba(26,168,118,0.18) 0%, rgba(26,168,118,0.05) 100%)",
           boxShadow:
-            "0 1px 2px rgba(15,23,42,0.06), 0 8px 18px -10px rgba(11,104,69,0.25), inset 0 1px 0 rgba(255,255,255,0.8)",
+            "0 0 32px -8px rgba(26,168,118,0.40), inset 0 1px 0 rgba(255,255,255,0.08)",
         }}
       >
-        <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+        <span className="h-1.5 w-1.5 rounded-full bg-[#2BC98A] animate-pulse shadow-[0_0_8px_rgba(43,201,138,0.8)]" />
         Built for US Supplemental Learning Centers
       </div>
-      <h1 className="font-display text-[44px] md:text-7xl font-bold uppercase text-ink leading-[1.02] tracking-[-0.02em]">
+      <h1 className="font-display text-[44px] md:text-7xl font-bold uppercase text-white leading-[1.02] tracking-[-0.02em]">
         The Rhythm Of Every
         <br />
         <span
           className="bg-clip-text text-transparent"
           style={{
             backgroundImage:
-              "linear-gradient(95deg, #1AA876 0%, #6366F1 50%, #F97316 100%)",
+              "linear-gradient(95deg, #2BC98A 0%, #818CF8 50%, #FDBA74 100%)",
           }}
         >
           Great Learning Center.
         </span>
       </h1>
-      <p className="mt-7 text-lg md:text-xl text-ink/70 max-w-2xl mx-auto leading-relaxed">
+      <p className="mt-7 text-lg md:text-xl text-white/65 max-w-2xl mx-auto leading-relaxed">
         Daily check-ins, automatic absence detection, and parent email reminders — all in one calm dashboard, ready the evening you sign up.
       </p>
 
@@ -184,9 +205,9 @@ function Hero() {
           className="group inline-flex items-center gap-2 px-8 py-4 rounded-md text-white font-semibold uppercase tracking-[0.08em] text-sm transition hover:-translate-y-px"
           style={{
             backgroundImage:
-              "linear-gradient(180deg, #FDBA74 0%, var(--color-accent) 55%, #C2410C 100%)",
+              "linear-gradient(180deg, #FDBA74 0%, #F97316 55%, #C2410C 100%)",
             boxShadow:
-              "0 4px 8px rgba(15,23,42,0.1), 0 16px 32px -10px rgba(249,115,22,0.45), inset 0 1px 0 rgba(255,255,255,0.4)",
+              "0 4px 8px rgba(0,0,0,0.4), 0 0 48px -8px rgba(249,115,22,0.65), inset 0 1px 0 rgba(255,255,255,0.35)",
           }}
         >
           Start Free
@@ -194,17 +215,19 @@ function Hero() {
         </Link>
         <Link
           href="/login"
-          className="group inline-flex items-center gap-2 px-8 py-4 rounded-md bg-surface text-primary-strong font-semibold uppercase tracking-[0.08em] text-sm ring-1 ring-inset ring-line/80 transition hover:-translate-y-px hover:ring-primary/40 hover:bg-primary-soft/40"
+          className="group inline-flex items-center gap-2 px-8 py-4 rounded-md text-white font-semibold uppercase tracking-[0.08em] text-sm transition hover:-translate-y-px"
           style={{
+            background: "rgba(255,255,255,0.06)",
+            backdropFilter: "blur(8px)",
             boxShadow:
-              "0 2px 4px rgba(15,23,42,0.05), 0 8px 18px -10px rgba(15,23,42,0.15)",
+              "inset 0 0 0 1px rgba(255,255,255,0.15), 0 8px 24px -8px rgba(0,0,0,0.5)",
           }}
         >
           Sign In
         </Link>
       </div>
 
-      <p className="mt-6 text-sm text-muted">
+      <p className="mt-6 text-sm text-white/50">
         No credit card required · Cancel anytime
       </p>
 
@@ -218,7 +241,7 @@ function Hero() {
 ========================================================================= */
 function TrustStrip() {
   return (
-    <section className="border-y border-line/60 bg-surface">
+    <section className="border-y border-white/[0.08] bg-white/[0.02] backdrop-blur-sm">
       <div className="max-w-6xl mx-auto px-6 py-10">
         <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-14 text-center md:text-left">
           <TrustBlock label="Designed for" body="Worksheet-based learning · two-day weekly schedules" />
@@ -226,13 +249,13 @@ function TrustStrip() {
           <TrustBlock
             label="Built with"
             body={
-              <span className="flex items-center gap-4 text-sm text-ink/75">
+              <span className="flex items-center gap-4 text-sm text-white/75">
                 <span className="inline-flex items-center gap-1.5">
-                  <ShieldCheck size={16} className="text-success" />
+                  <ShieldCheck size={16} className="text-[#2BC98A]" />
                   COPPA-aware
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <ShieldCheck size={16} className="text-success" />
+                  <ShieldCheck size={16} className="text-[#2BC98A]" />
                   FERPA-friendly
                 </span>
               </span>
@@ -249,16 +272,16 @@ function TrustStrip() {
 function TrustBlock({ label, body }: { label: string; body: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-[0.22em] text-muted font-semibold">
+      <p className="text-[10px] uppercase tracking-[0.22em] text-white/50 font-bold">
         {label}
       </p>
-      <div className="mt-2 text-[15px] text-primary/80 font-medium">{body}</div>
+      <div className="mt-2 text-[15px] text-white/85 font-medium">{body}</div>
     </div>
   );
 }
 
 function Divider() {
-  return <div className="h-10 w-px bg-line hidden md:block" />;
+  return <div className="h-10 w-px bg-white/10 hidden md:block" />;
 }
 
 /* =========================================================================
@@ -269,10 +292,19 @@ function Features() {
     <section id="features" className="max-w-6xl mx-auto px-6 py-24 md:py-28">
       <div className="text-center mb-16 max-w-2xl mx-auto">
         <Eyebrow tone="indigo">Capabilities</Eyebrow>
-        <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-primary leading-[1.05] tracking-[-0.015em]">
-          Everything Your Center Runs On.<br />In One Place.
+        <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-white leading-[1.05] tracking-[-0.015em]">
+          Everything Your Center Runs On.<br />
+          <span
+            className="bg-clip-text text-transparent"
+            style={{
+              backgroundImage:
+                "linear-gradient(95deg, #2BC98A 0%, #818CF8 100%)",
+            }}
+          >
+            In One Place.
+          </span>
         </h2>
-        <p className="mt-5 text-lg text-ink/70 leading-relaxed">
+        <p className="mt-5 text-lg text-white/65 leading-relaxed">
           Built to replace the clipboard, the group text, and the spreadsheet — without replacing the human touch that keeps families coming back.
         </p>
       </div>
@@ -324,18 +356,27 @@ function Features() {
 ========================================================================= */
 function ParentComms() {
   return (
-    <section className="bg-surface border-y border-line">
+    <section className="border-y border-white/[0.08] bg-white/[0.02] backdrop-blur-sm">
       <div className="max-w-6xl mx-auto px-6 py-24 md:py-28">
         <div className="grid md:grid-cols-2 gap-12 md:gap-20 items-center">
           <div>
             <Eyebrow tone="primary">Stay In Sync</Eyebrow>
-            <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-primary leading-[1.05] tracking-[-0.015em]">
-              Parents Stay Informed.<br />You Stay Focused.
+            <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-white leading-[1.05] tracking-[-0.015em]">
+              Parents Stay Informed.<br />
+              <span
+                className="bg-clip-text text-transparent"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(95deg, #2BC98A 0%, #FDBA74 100%)",
+                }}
+              >
+                You Stay Focused.
+              </span>
             </h2>
-            <p className="mt-6 text-lg text-ink/70 leading-relaxed">
+            <p className="mt-6 text-lg text-white/65 leading-relaxed">
               Every reminder, absence alert, and make-up offer is sent automatically — branded as you. The same events surface in your in-app bell, so you can see at a glance what just happened.
             </p>
-            <ul className="mt-8 space-y-3 text-ink/80">
+            <ul className="mt-8 space-y-3 text-white/80">
               <FeatureBullet>Day-of reminders go out each morning automatically</FeatureBullet>
               <FeatureBullet>Marked absent? Parent gets an email instantly, and you see it on your dashboard</FeatureBullet>
               <FeatureBullet>Make-up offers include a one-tap accept/decline link for parents</FeatureBullet>
@@ -356,8 +397,14 @@ function ParentComms() {
 function FeatureBullet({ children }: { children: React.ReactNode }) {
   return (
     <li className="flex items-start gap-3">
-      <span className="mt-1 flex-shrink-0 w-5 h-5 rounded-full bg-success-soft flex items-center justify-center">
-        <Check size={12} className="text-success" />
+      <span
+        className="mt-1 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center"
+        style={{
+          background: "rgba(43,201,138,0.15)",
+          boxShadow: "inset 0 0 0 1px rgba(43,201,138,0.30), 0 0 12px -2px rgba(43,201,138,0.45)",
+        }}
+      >
+        <Check size={12} className="text-[#5EEAD4]" />
       </span>
       <span className="leading-relaxed">{children}</span>
     </li>
@@ -372,8 +419,17 @@ function HowItWorks() {
     <section id="how" className="max-w-6xl mx-auto px-6 py-24 md:py-28">
       <div className="text-center mb-16 max-w-2xl mx-auto">
         <Eyebrow tone="accent">How It Works</Eyebrow>
-        <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-primary leading-[1.05] tracking-[-0.015em]">
-          Paper To Digital,<br />In One Evening.
+        <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-white leading-[1.05] tracking-[-0.015em]">
+          Paper To Digital,<br />
+          <span
+            className="bg-clip-text text-transparent"
+            style={{
+              backgroundImage:
+                "linear-gradient(95deg, #FDBA74 0%, #2BC98A 100%)",
+            }}
+          >
+            In One Evening.
+          </span>
         </h2>
       </div>
 
@@ -423,8 +479,16 @@ function StepCard({
 }) {
   const style = STEP_STYLES[(n - 1) % STEP_STYLES.length];
   return (
-    <div className="group relative bg-surface rounded-xl border border-line shadow-card overflow-hidden transition hover:-translate-y-1 hover:shadow-pop">
-      <span aria-hidden className={`absolute inset-x-0 top-0 h-[3px] ${style.accent}`} />
+    <div
+      className="group relative rounded-2xl overflow-hidden transition hover:-translate-y-1"
+      style={{
+        background:
+          "linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.02) 100%)",
+        backdropFilter: "blur(8px)",
+        boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08), 0 8px 24px -12px rgba(0,0,0,0.5)",
+      }}
+    >
+      <span aria-hidden className={`absolute inset-x-0 top-0 h-[2px] ${style.accent}`} />
       <div className="p-7">
         <div
           className="w-11 h-11 rounded-2xl text-white font-display text-lg font-bold flex items-center justify-center mb-4 transition group-hover:scale-110"
@@ -435,12 +499,12 @@ function StepCard({
         >
           {n}
         </div>
-        <h3 className="font-display text-xl text-ink font-bold mb-2">
+        <h3 className="font-display text-xl text-white font-bold mb-2">
           {title}
         </h3>
-        <p className="text-ink/70 leading-relaxed text-[15px]">{body}</p>
+        <p className="text-white/65 leading-relaxed text-[15px]">{body}</p>
       </div>
-      <div className="border-t border-line bg-bg/50 p-5">{children}</div>
+      <div className="border-t border-white/[0.06] bg-black/20 p-5">{children}</div>
     </div>
   );
 }
@@ -450,7 +514,7 @@ function StepCard({
 ========================================================================= */
 function Stats() {
   return (
-    <section className="bg-surface border-y border-line">
+    <section className="border-y border-white/[0.08] bg-white/[0.02] backdrop-blur-sm">
       <div className="max-w-6xl mx-auto px-6 py-20">
         <div className="grid md:grid-cols-3 gap-10 text-center">
           <Stat
@@ -491,7 +555,7 @@ function Stat({
       >
         {figure}
       </p>
-      <p className="mt-3 text-ink/70 text-[15px] leading-relaxed max-w-xs mx-auto">
+      <p className="mt-3 text-white/65 text-[15px] leading-relaxed max-w-xs mx-auto">
         {label}
       </p>
     </div>
@@ -507,20 +571,26 @@ function CTAStrip() {
       className="relative text-white overflow-hidden"
       style={{
         backgroundImage:
-          "linear-gradient(135deg, #0B6845 0%, #1AA876 35%, #4338CA 75%, #6366F1 100%)",
+          "linear-gradient(135deg, #064E3B 0%, #0B6845 25%, #1E1B4B 60%, #312E81 100%)",
       }}
     >
-      {/* Warm orange wash bottom-right to break up the cool tones */}
+      {/* Warm orange wash bottom-right */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -bottom-32 -right-32 w-[480px] h-[480px] opacity-40 blur-3xl"
+        className="pointer-events-none absolute -bottom-40 -right-40 w-[600px] h-[600px] opacity-50 blur-3xl"
         style={{ background: "radial-gradient(closest-side, #F97316, transparent)" }}
       />
-      {/* Soft white spotlight up-left so the headline doesn't get lost */}
+      {/* Emerald glow top-left */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-32 -left-32 w-[480px] h-[480px] opacity-25 blur-3xl"
-        style={{ background: "radial-gradient(closest-side, #ffffff, transparent)" }}
+        className="pointer-events-none absolute -top-40 -left-40 w-[600px] h-[600px] opacity-50 blur-3xl"
+        style={{ background: "radial-gradient(closest-side, #2BC98A, transparent)" }}
+      />
+      {/* Indigo accent center */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] opacity-30 blur-3xl"
+        style={{ background: "radial-gradient(closest-side, #818CF8, transparent)" }}
       />
       <div className="relative max-w-4xl mx-auto px-6 py-20 md:py-24 text-center">
         <h2 className="font-display text-3xl md:text-5xl font-bold uppercase leading-[1.05] tracking-[-0.015em]">
@@ -559,17 +629,17 @@ function CTAStrip() {
 ========================================================================= */
 function Footer() {
   return (
-    <footer className="bg-bg border-t border-line">
+    <footer className="border-t border-white/[0.08] bg-black/30 backdrop-blur-sm">
       <div className="max-w-6xl mx-auto px-6 py-14">
         <div className="grid md:grid-cols-3 gap-10">
           <div>
             <div className="flex items-center gap-2.5 mb-4">
               <Glyph size={22} />
-              <span className="font-wordmark text-lg text-primary font-semibold">
+              <span className="font-wordmark text-lg text-white font-semibold">
                 ClassCadence
               </span>
             </div>
-            <p className="text-sm text-muted leading-relaxed max-w-xs">
+            <p className="text-sm text-white/55 leading-relaxed max-w-xs">
               The student-management platform for US supplemental learning centers. Daily check-ins, automatic absence detection, parent email reminders.
             </p>
           </div>
@@ -583,7 +653,7 @@ function Footer() {
             ["Contact", "mailto:hello@tryclasscadence.com"],
           ]} />
         </div>
-        <div className="mt-14 pt-6 border-t border-line text-sm text-muted flex flex-col md:flex-row justify-between items-center gap-3">
+        <div className="mt-14 pt-6 border-t border-white/[0.06] text-sm text-white/45 flex flex-col md:flex-row justify-between items-center gap-3">
           <p>© {new Date().getFullYear()} ClassCadence. All rights reserved.</p>
           <p>Made for centers, by people who&apos;ve worked the front desk.</p>
         </div>
@@ -601,13 +671,16 @@ function FooterCol({
 }) {
   return (
     <div>
-      <h4 className="font-semibold text-ink mb-3 text-[11px] uppercase tracking-[0.15em]">
+      <h4 className="font-bold text-white mb-3 text-[11px] uppercase tracking-[0.18em]">
         {title}
       </h4>
       <ul className="space-y-2.5">
         {links.map(([label, href]) => (
           <li key={label}>
-            <Link href={href} className="text-sm text-muted hover:text-primary transition-colors">
+            <Link
+              href={href}
+              className="text-sm text-white/55 hover:text-white transition-colors"
+            >
               {label}
             </Link>
           </li>
@@ -628,44 +701,44 @@ const FEATURE_TONES: Record<
     iconBg: string;
     iconText: string;
     accentBar: string;
-    titleHover: string;
+    glow: string; // rgba for the colored shadow halo
   }
 > = {
   primary: {
-    iconBg: "bg-primary-soft",
-    iconText: "text-primary-strong",
-    accentBar: "bg-primary",
-    titleHover: "group-hover:text-primary-strong",
+    iconBg: "rgba(43,201,138,0.15)",
+    iconText: "text-[#5EEAD4]",
+    accentBar: "linear-gradient(90deg, #2BC98A, transparent)",
+    glow: "rgba(43,201,138,0.35)",
   },
   indigo: {
-    iconBg: "bg-[#E0E7FF]",
-    iconText: "text-[#4338CA]",
-    accentBar: "bg-[#6366F1]",
-    titleHover: "group-hover:text-[#4338CA]",
+    iconBg: "rgba(129,140,248,0.15)",
+    iconText: "text-[#A5B4FC]",
+    accentBar: "linear-gradient(90deg, #818CF8, transparent)",
+    glow: "rgba(129,140,248,0.35)",
   },
   danger: {
-    iconBg: "bg-danger/10",
-    iconText: "text-danger",
-    accentBar: "bg-danger",
-    titleHover: "group-hover:text-danger",
+    iconBg: "rgba(248,113,113,0.15)",
+    iconText: "text-[#FCA5A5]",
+    accentBar: "linear-gradient(90deg, #F87171, transparent)",
+    glow: "rgba(248,113,113,0.35)",
   },
   accent: {
-    iconBg: "bg-accent-soft",
-    iconText: "text-accent",
-    accentBar: "bg-accent",
-    titleHover: "group-hover:text-accent",
+    iconBg: "rgba(253,186,116,0.15)",
+    iconText: "text-[#FDBA74]",
+    accentBar: "linear-gradient(90deg, #FDBA74, transparent)",
+    glow: "rgba(253,186,116,0.35)",
   },
   teal: {
-    iconBg: "bg-[#CCFBF1]",
-    iconText: "text-[#0F766E]",
-    accentBar: "bg-[#14B8A6]",
-    titleHover: "group-hover:text-[#0F766E]",
+    iconBg: "rgba(45,212,191,0.15)",
+    iconText: "text-[#5EEAD4]",
+    accentBar: "linear-gradient(90deg, #2DD4BF, transparent)",
+    glow: "rgba(45,212,191,0.35)",
   },
   pink: {
-    iconBg: "bg-[#FCE7F3]",
-    iconText: "text-[#BE185D]",
-    accentBar: "bg-[#EC4899]",
-    titleHover: "group-hover:text-[#BE185D]",
+    iconBg: "rgba(244,114,182,0.15)",
+    iconText: "text-[#F9A8D4]",
+    accentBar: "linear-gradient(90deg, #F472B6, transparent)",
+    glow: "rgba(244,114,182,0.35)",
   },
 };
 
@@ -682,20 +755,39 @@ function FeatureCard({
 }) {
   const t = FEATURE_TONES[tone];
   return (
-    <div className="group relative overflow-hidden bg-surface rounded-xl p-7 border border-line shadow-card hover:shadow-pop hover:-translate-y-1 transition-all">
+    <div
+      className="group relative overflow-hidden rounded-2xl p-7 transition hover:-translate-y-1"
+      style={{
+        background:
+          "linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.02) 100%)",
+        backdropFilter: "blur(8px)",
+        boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.08), 0 8px 24px -12px rgba(0,0,0,0.5)`,
+      }}
+    >
       <span
         aria-hidden
-        className={`absolute inset-x-0 top-0 h-[3px] ${t.accentBar}`}
+        className="absolute inset-x-0 top-0 h-[2px]"
+        style={{ backgroundImage: t.accentBar }}
+      />
+      {/* Hover glow */}
+      <span
+        aria-hidden
+        className="absolute -top-12 -right-12 w-40 h-40 rounded-full opacity-0 group-hover:opacity-100 blur-3xl transition-opacity"
+        style={{ background: `radial-gradient(closest-side, ${t.glow}, transparent)` }}
       />
       <div
-        className={`w-12 h-12 rounded-xl ${t.iconBg} ${t.iconText} flex items-center justify-center mb-5 transition group-hover:scale-110 group-hover:-rotate-3`}
+        className={`relative w-12 h-12 rounded-xl ${t.iconText} flex items-center justify-center mb-5 transition group-hover:scale-110 group-hover:-rotate-3`}
+        style={{
+          background: t.iconBg,
+          boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.08), 0 0 24px -8px ${t.glow}`,
+        }}
       >
         <Icon size={22} />
       </div>
-      <h3 className={`font-display text-xl text-ink font-bold mb-2 transition ${t.titleHover}`}>
+      <h3 className="relative font-display text-xl text-white font-bold mb-2 transition">
         {title}
       </h3>
-      <p className="text-ink/70 leading-relaxed text-[15px]">{body}</p>
+      <p className="relative text-white/65 leading-relaxed text-[15px]">{body}</p>
     </div>
   );
 }
@@ -1019,10 +1111,19 @@ function ProductTour() {
       />
       <div className="text-center mb-14 max-w-2xl mx-auto">
         <Eyebrow>A Glimpse Inside</Eyebrow>
-        <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-primary leading-[1.05] tracking-[-0.015em]">
-          Every Screen Built<br />For The Front Desk.
+        <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-white leading-[1.05] tracking-[-0.015em]">
+          Every Screen Built<br />
+          <span
+            className="bg-clip-text text-transparent"
+            style={{
+              backgroundImage:
+                "linear-gradient(95deg, #818CF8 0%, #F472B6 100%)",
+            }}
+          >
+            For The Front Desk.
+          </span>
         </h2>
-        <p className="mt-5 text-lg text-ink/70 leading-relaxed">
+        <p className="mt-5 text-lg text-white/65 leading-relaxed">
           Dashboard for the tenant admin. Today screen for the front desk. Schedule, make-ups, and student records in between.
         </p>
       </div>
@@ -1104,7 +1205,7 @@ function BrowserTile({
       </div>
       <div className="mt-3 flex items-center gap-2">
         <span aria-hidden className={`h-2 w-2 rounded-full ${dotColor}`} />
-        <p className="text-sm font-bold uppercase tracking-[0.08em] text-primary-strong">
+        <p className="text-sm font-bold uppercase tracking-[0.08em] text-white/85">
           {title}
         </p>
       </div>
@@ -1396,22 +1497,31 @@ function PageMockStudents() {
 ========================================================================= */
 function ReminderShowcase() {
   return (
-    <section className="bg-surface border-y border-line relative overflow-hidden">
+    <section className="border-y border-white/[0.08] bg-white/[0.02] backdrop-blur-sm relative overflow-hidden">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-40 -z-0"
+        className="pointer-events-none absolute inset-0 opacity-30 -z-0"
         style={{
           backgroundImage:
-            "radial-gradient(ellipse 500px 240px at 50% 0%, #D6F4E5, transparent 70%)",
+            "radial-gradient(ellipse 500px 240px at 50% 0%, rgba(26,168,118,0.35), transparent 70%)",
         }}
       />
       <div className="relative max-w-6xl mx-auto px-6 py-24 md:py-28">
         <div className="text-center mb-14 max-w-2xl mx-auto">
           <Eyebrow tone="danger">Parent Reminders</Eyebrow>
-          <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-primary leading-[1.05] tracking-[-0.015em]">
-            What Parents<br />Actually Receive.
+          <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-white leading-[1.05] tracking-[-0.015em]">
+            What Parents<br />
+            <span
+              className="bg-clip-text text-transparent"
+              style={{
+                backgroundImage:
+                  "linear-gradient(95deg, #F87171 0%, #FDBA74 100%)",
+              }}
+            >
+              Actually Receive.
+            </span>
           </h2>
-          <p className="mt-5 text-lg text-ink/70 leading-relaxed">
+          <p className="mt-5 text-lg text-white/65 leading-relaxed">
             Three email types fire automatically — branded as you, sent from your domain, opted out per student if they ask.
           </p>
         </div>
@@ -1465,7 +1575,7 @@ function ReminderTile({
       </div>
       <div className="mt-3 flex items-center gap-2">
         <span aria-hidden className={`h-2 w-2 rounded-full ${dotBg}`} />
-        <p className="text-sm font-bold uppercase tracking-[0.08em] text-primary-strong">
+        <p className="text-sm font-bold uppercase tracking-[0.08em] text-white/85">
           {title}
         </p>
       </div>

@@ -7,6 +7,9 @@ import { submitSignupAction, type SignupState } from "./actions";
 
 const initial: SignupState = { error: null, fieldErrors: {}, success: false };
 
+const inputClass =
+  "block w-full rounded-md bg-white/[0.04] px-3 py-2.5 text-sm text-white placeholder:text-white/35 ring-1 ring-inset ring-white/10 transition focus:bg-white/[0.06] focus:outline-none focus:ring-2 focus:ring-[#2BC98A]/60";
+
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
@@ -37,22 +40,30 @@ export function SignupForm() {
           className="inline-flex h-16 w-16 items-center justify-center rounded-full mb-5"
           style={{
             backgroundImage:
-              "linear-gradient(180deg, #2BC98A 0%, var(--color-primary) 55%, var(--color-primary-strong) 100%)",
+              "linear-gradient(180deg, #2BC98A 0%, #1AA876 55%, #0B6845 100%)",
             boxShadow:
-              "0 4px 8px rgba(15,23,42,0.1), 0 16px 32px -10px rgba(11,104,69,0.45), inset 0 1px 0 rgba(255,255,255,0.4)",
+              "0 0 48px -8px rgba(43,201,138,0.7), inset 0 1px 0 rgba(255,255,255,0.35)",
           }}
         >
           <Check className="h-7 w-7 text-white" strokeWidth={3} />
         </div>
-        <h2 className="font-display text-3xl md:text-4xl font-bold uppercase text-primary leading-[1.1] tracking-[-0.015em]">
-          Thanks — We&apos;ll Be In Touch.
+        <h2 className="font-display text-3xl md:text-4xl font-bold uppercase text-white leading-[1.1] tracking-[-0.015em]">
+          Thanks —{" "}
+          <span
+            className="bg-clip-text text-transparent"
+            style={{
+              backgroundImage: "linear-gradient(95deg, #2BC98A, #FDBA74)",
+            }}
+          >
+            We&apos;ll Be In Touch.
+          </span>
         </h2>
-        <p className="mt-4 text-base text-ink/70 leading-relaxed max-w-md mx-auto">
+        <p className="mt-4 text-base text-white/65 leading-relaxed max-w-md mx-auto">
           We received your details and a confirmation email is on its way to your inbox. Someone from our team will reach out shortly to get your center set up.
         </p>
         <Link
           href="/"
-          className="mt-8 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-primary-strong hover:underline"
+          className="mt-8 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-[#5EEAD4] hover:text-white transition-colors"
         >
           Back to home
         </Link>
@@ -71,7 +82,7 @@ export function SignupForm() {
             required
             maxLength={120}
             autoComplete="name"
-            className="form-input"
+            className={inputClass}
           />
         </Field>
         <Field id="email" label="Work email" required error={state.fieldErrors.email}>
@@ -82,7 +93,7 @@ export function SignupForm() {
             required
             maxLength={160}
             autoComplete="email"
-            className="form-input"
+            className={inputClass}
           />
         </Field>
       </div>
@@ -96,7 +107,7 @@ export function SignupForm() {
             maxLength={160}
             autoComplete="organization"
             placeholder="e.g. Spring Valley Kumon"
-            className="form-input"
+            className={inputClass}
           />
         </Field>
         <Field id="phone" label="Phone" error={state.fieldErrors.phone}>
@@ -107,7 +118,7 @@ export function SignupForm() {
             maxLength={40}
             autoComplete="tel"
             placeholder="Optional"
-            className="form-input"
+            className={inputClass}
           />
         </Field>
       </div>
@@ -123,14 +134,14 @@ export function SignupForm() {
       </Field>
 
       {state.error ? (
-        <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
+        <p className="rounded-md bg-[#F87171]/10 ring-1 ring-inset ring-[#F87171]/30 px-3 py-2 text-sm text-[#FCA5A5]">
           {state.error}
         </p>
       ) : null}
 
       <SubmitButton />
 
-      <p className="text-center text-xs text-muted flex items-center justify-center gap-1.5">
+      <p className="text-center text-xs text-white/45 flex items-center justify-center gap-1.5">
         <MailCheck className="h-3 w-3" />
         We&apos;ll only use your email to follow up — no spam.
       </p>
@@ -155,13 +166,13 @@ function Field({
     <div>
       <label
         htmlFor={id}
-        className="block text-[11px] font-bold uppercase tracking-[0.12em] text-ink/70"
+        className="block text-[11px] font-bold uppercase tracking-[0.12em] text-white/55"
       >
         {label}
-        {required ? <span className="ml-1 text-accent">*</span> : null}
+        {required ? <span className="ml-1 text-[#FDBA74]">*</span> : null}
       </label>
       <div className="mt-1.5">{children}</div>
-      {error ? <p className="mt-1 text-xs text-danger">{error}</p> : null}
+      {error ? <p className="mt-1 text-xs text-[#FCA5A5]">{error}</p> : null}
     </div>
   );
 }
