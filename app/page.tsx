@@ -75,10 +75,27 @@ function Glyph({ size = 32, dropShadow = true }: { size?: number; dropShadow?: b
   );
 }
 
-function Eyebrow({ children }: { children: React.ReactNode }) {
+type EyebrowTone = "accent" | "primary" | "indigo" | "danger";
+
+function Eyebrow({
+  children,
+  tone = "accent",
+}: {
+  children: React.ReactNode;
+  tone?: EyebrowTone;
+}) {
+  const map: Record<EyebrowTone, { text: string; dot: string }> = {
+    accent: { text: "text-accent", dot: "bg-accent" },
+    primary: { text: "text-primary-strong", dot: "bg-primary" },
+    indigo: { text: "text-[#4338CA]", dot: "bg-[#6366F1]" },
+    danger: { text: "text-danger", dot: "bg-danger" },
+  };
+  const t = map[tone];
   return (
-    <p className="inline-flex items-center gap-2 text-[11px] font-bold text-accent uppercase tracking-[0.22em]">
-      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />
+    <p
+      className={`inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.22em] ${t.text}`}
+    >
+      <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${t.dot}`} />
       {children}
     </p>
   );
@@ -144,14 +161,14 @@ function Hero() {
         <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
         Built for US Supplemental Learning Centers
       </div>
-      <h1 className="font-display text-[44px] md:text-7xl font-bold uppercase text-primary leading-[1.02] tracking-[-0.02em]">
+      <h1 className="font-display text-[44px] md:text-7xl font-bold uppercase text-ink leading-[1.02] tracking-[-0.02em]">
         The Rhythm Of Every
         <br />
         <span
           className="bg-clip-text text-transparent"
           style={{
             backgroundImage:
-              "linear-gradient(180deg, #2BC98A 0%, var(--color-primary) 55%, var(--color-primary-strong) 100%)",
+              "linear-gradient(95deg, #1AA876 0%, #6366F1 50%, #F97316 100%)",
           }}
         >
           Great Learning Center.
@@ -251,7 +268,7 @@ function Features() {
   return (
     <section id="features" className="max-w-6xl mx-auto px-6 py-24 md:py-28">
       <div className="text-center mb-16 max-w-2xl mx-auto">
-        <Eyebrow>Capabilities</Eyebrow>
+        <Eyebrow tone="indigo">Capabilities</Eyebrow>
         <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-primary leading-[1.05] tracking-[-0.015em]">
           Everything Your Center Runs On.<br />In One Place.
         </h2>
@@ -263,31 +280,37 @@ function Features() {
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
         <FeatureCard
           Icon={Clock}
+          tone="primary"
           title="One-tap check-in"
           body="Open Today, see who's expected, check students in with a single tap. A live timer counts the minutes they've been on-site. Check out the same way."
         />
         <FeatureCard
           Icon={Users}
+          tone="indigo"
           title="Student-first records"
           body="Parent contact info lives directly on the student. No separate household table to maintain. Add a sibling in seconds — each carries their own enrollment, attendance, and notes."
         />
         <FeatureCard
           Icon={AlertCircle}
+          tone="danger"
           title="Automatic absence detection"
           body="When a session ends and a student never showed, the system marks them absent and notifies the parent — without anyone having to remember."
         />
         <FeatureCard
           Icon={Mail}
+          tone="accent"
           title="Automatic parent email"
           body="Enrollment confirmations, day-of class reminders, absence alerts, and make-up offers. Each sent from your branded sender. Per-parent opt-out respected."
         />
         <FeatureCard
           Icon={Building2}
+          tone="teal"
           title="Multi-location ready"
           body="Add a second center with its own hours, classrooms, and team. Each location keeps its own timezone and schedule. Tenant admins see everything; staff see just their own."
         />
         <FeatureCard
           Icon={Palette}
+          tone="pink"
           title="Your brand, end to end"
           body="Your logo, your primary color, your sender name and address. Parents see your center in every email and every page — never our name."
         />
@@ -305,7 +328,7 @@ function ParentComms() {
       <div className="max-w-6xl mx-auto px-6 py-24 md:py-28">
         <div className="grid md:grid-cols-2 gap-12 md:gap-20 items-center">
           <div>
-            <Eyebrow>Stay In Sync</Eyebrow>
+            <Eyebrow tone="primary">Stay In Sync</Eyebrow>
             <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-primary leading-[1.05] tracking-[-0.015em]">
               Parents Stay Informed.<br />You Stay Focused.
             </h2>
@@ -348,7 +371,7 @@ function HowItWorks() {
   return (
     <section id="how" className="max-w-6xl mx-auto px-6 py-24 md:py-28">
       <div className="text-center mb-16 max-w-2xl mx-auto">
-        <Eyebrow>How It Works</Eyebrow>
+        <Eyebrow tone="accent">How It Works</Eyebrow>
         <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-primary leading-[1.05] tracking-[-0.015em]">
           Paper To Digital,<br />In One Evening.
         </h2>
@@ -369,6 +392,24 @@ function HowItWorks() {
   );
 }
 
+const STEP_STYLES = [
+  {
+    bg: "linear-gradient(180deg, #2BC98A 0%, #1AA876 55%, #0B6845 100%)",
+    shadow: "0 6px 14px -4px rgba(11,104,69,0.45)",
+    accent: "bg-primary",
+  },
+  {
+    bg: "linear-gradient(180deg, #818CF8 0%, #6366F1 55%, #4338CA 100%)",
+    shadow: "0 6px 14px -4px rgba(67,56,202,0.45)",
+    accent: "bg-[#6366F1]",
+  },
+  {
+    bg: "linear-gradient(180deg, #FDBA74 0%, #F97316 55%, #C2410C 100%)",
+    shadow: "0 6px 14px -4px rgba(194,65,12,0.45)",
+    accent: "bg-accent",
+  },
+];
+
 function StepCard({
   n,
   title,
@@ -380,13 +421,21 @@ function StepCard({
   body: string;
   children?: React.ReactNode;
 }) {
+  const style = STEP_STYLES[(n - 1) % STEP_STYLES.length];
   return (
-    <div className="bg-surface rounded-lg border border-line shadow-card overflow-hidden">
+    <div className="group relative bg-surface rounded-xl border border-line shadow-card overflow-hidden transition hover:-translate-y-1 hover:shadow-pop">
+      <span aria-hidden className={`absolute inset-x-0 top-0 h-[3px] ${style.accent}`} />
       <div className="p-7">
-        <div className="w-9 h-9 rounded-full bg-primary-soft text-primary font-display text-base font-semibold flex items-center justify-center mb-4">
+        <div
+          className="w-11 h-11 rounded-2xl text-white font-display text-lg font-bold flex items-center justify-center mb-4 transition group-hover:scale-110"
+          style={{
+            backgroundImage: style.bg,
+            boxShadow: `${style.shadow}, inset 0 1px 0 rgba(255,255,255,0.4)`,
+          }}
+        >
           {n}
         </div>
-        <h3 className="font-display text-xl text-primary font-semibold mb-2">
+        <h3 className="font-display text-xl text-ink font-bold mb-2">
           {title}
         </h3>
         <p className="text-ink/70 leading-relaxed text-[15px]">{body}</p>
@@ -404,22 +453,47 @@ function Stats() {
     <section className="bg-surface border-y border-line">
       <div className="max-w-6xl mx-auto px-6 py-20">
         <div className="grid md:grid-cols-3 gap-10 text-center">
-          <Stat figure="One tap" label="To check a student in. No paper, no clipboard." />
-          <Stat figure="Automatic" label="Absence detection — no admin has to remember." />
-          <Stat figure="One evening" label="From signing up to the first real check-in." />
+          <Stat
+            figure="One Tap"
+            label="To check a student in. No paper, no clipboard."
+            gradient="linear-gradient(180deg, #2BC98A 0%, #1AA876 55%, #0B6845 100%)"
+          />
+          <Stat
+            figure="Automatic"
+            label="Absence detection — no admin has to remember."
+            gradient="linear-gradient(180deg, #818CF8 0%, #6366F1 55%, #4338CA 100%)"
+          />
+          <Stat
+            figure="One Evening"
+            label="From signing up to the first real check-in."
+            gradient="linear-gradient(180deg, #FDBA74 0%, #F97316 55%, #C2410C 100%)"
+          />
         </div>
       </div>
     </section>
   );
 }
 
-function Stat({ figure, label }: { figure: string; label: string }) {
+function Stat({
+  figure,
+  label,
+  gradient,
+}: {
+  figure: string;
+  label: string;
+  gradient: string;
+}) {
   return (
     <div>
-      <p className="font-display text-4xl md:text-5xl text-primary font-semibold tracking-tight">
+      <p
+        className="font-display text-4xl md:text-5xl font-bold uppercase tracking-[-0.015em] bg-clip-text text-transparent inline-block"
+        style={{ backgroundImage: gradient }}
+      >
         {figure}
       </p>
-      <p className="mt-3 text-ink/70 text-[15px] leading-relaxed max-w-xs mx-auto">{label}</p>
+      <p className="mt-3 text-ink/70 text-[15px] leading-relaxed max-w-xs mx-auto">
+        {label}
+      </p>
     </div>
   );
 }
@@ -429,8 +503,26 @@ function Stat({ figure, label }: { figure: string; label: string }) {
 ========================================================================= */
 function CTAStrip() {
   return (
-    <section className="bg-primary text-white">
-      <div className="max-w-4xl mx-auto px-6 py-20 md:py-24 text-center">
+    <section
+      className="relative text-white overflow-hidden"
+      style={{
+        backgroundImage:
+          "linear-gradient(135deg, #0B6845 0%, #1AA876 35%, #4338CA 75%, #6366F1 100%)",
+      }}
+    >
+      {/* Warm orange wash bottom-right to break up the cool tones */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-32 -right-32 w-[480px] h-[480px] opacity-40 blur-3xl"
+        style={{ background: "radial-gradient(closest-side, #F97316, transparent)" }}
+      />
+      {/* Soft white spotlight up-left so the headline doesn't get lost */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-32 -left-32 w-[480px] h-[480px] opacity-25 blur-3xl"
+        style={{ background: "radial-gradient(closest-side, #ffffff, transparent)" }}
+      />
+      <div className="relative max-w-4xl mx-auto px-6 py-20 md:py-24 text-center">
         <h2 className="font-display text-3xl md:text-5xl font-bold uppercase leading-[1.05] tracking-[-0.015em]">
           Run Your Center Calmer,<br />Starting Tonight.
         </h2>
@@ -528,21 +620,79 @@ function FooterCol({
 /* =========================================================================
    Feature card
 ========================================================================= */
+type FeatureTone = "primary" | "indigo" | "danger" | "accent" | "teal" | "pink";
+
+const FEATURE_TONES: Record<
+  FeatureTone,
+  {
+    iconBg: string;
+    iconText: string;
+    accentBar: string;
+    titleHover: string;
+  }
+> = {
+  primary: {
+    iconBg: "bg-primary-soft",
+    iconText: "text-primary-strong",
+    accentBar: "bg-primary",
+    titleHover: "group-hover:text-primary-strong",
+  },
+  indigo: {
+    iconBg: "bg-[#E0E7FF]",
+    iconText: "text-[#4338CA]",
+    accentBar: "bg-[#6366F1]",
+    titleHover: "group-hover:text-[#4338CA]",
+  },
+  danger: {
+    iconBg: "bg-danger/10",
+    iconText: "text-danger",
+    accentBar: "bg-danger",
+    titleHover: "group-hover:text-danger",
+  },
+  accent: {
+    iconBg: "bg-accent-soft",
+    iconText: "text-accent",
+    accentBar: "bg-accent",
+    titleHover: "group-hover:text-accent",
+  },
+  teal: {
+    iconBg: "bg-[#CCFBF1]",
+    iconText: "text-[#0F766E]",
+    accentBar: "bg-[#14B8A6]",
+    titleHover: "group-hover:text-[#0F766E]",
+  },
+  pink: {
+    iconBg: "bg-[#FCE7F3]",
+    iconText: "text-[#BE185D]",
+    accentBar: "bg-[#EC4899]",
+    titleHover: "group-hover:text-[#BE185D]",
+  },
+};
+
 function FeatureCard({
   Icon,
   title,
   body,
+  tone = "primary",
 }: {
   Icon: LucideIcon;
   title: string;
   body: string;
+  tone?: FeatureTone;
 }) {
+  const t = FEATURE_TONES[tone];
   return (
-    <div className="bg-surface rounded-lg p-7 border border-line shadow-card hover:shadow-pop hover:-translate-y-0.5 transition-all">
-      <div className="w-11 h-11 rounded-md bg-primary-soft flex items-center justify-center mb-5">
-        <Icon size={20} className="text-primary" />
+    <div className="group relative overflow-hidden bg-surface rounded-xl p-7 border border-line shadow-card hover:shadow-pop hover:-translate-y-1 transition-all">
+      <span
+        aria-hidden
+        className={`absolute inset-x-0 top-0 h-[3px] ${t.accentBar}`}
+      />
+      <div
+        className={`w-12 h-12 rounded-xl ${t.iconBg} ${t.iconText} flex items-center justify-center mb-5 transition group-hover:scale-110 group-hover:-rotate-3`}
+      >
+        <Icon size={22} />
       </div>
-      <h3 className="font-display text-xl text-primary font-semibold mb-2">
+      <h3 className={`font-display text-xl text-ink font-bold mb-2 transition ${t.titleHover}`}>
         {title}
       </h3>
       <p className="text-ink/70 leading-relaxed text-[15px]">{body}</p>
@@ -1257,7 +1407,7 @@ function ReminderShowcase() {
       />
       <div className="relative max-w-6xl mx-auto px-6 py-24 md:py-28">
         <div className="text-center mb-14 max-w-2xl mx-auto">
-          <Eyebrow>Parent Reminders</Eyebrow>
+          <Eyebrow tone="danger">Parent Reminders</Eyebrow>
           <h2 className="mt-3 font-display text-3xl md:text-5xl font-bold uppercase text-primary leading-[1.05] tracking-[-0.015em]">
             What Parents<br />Actually Receive.
           </h2>
