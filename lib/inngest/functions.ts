@@ -1,6 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { inngest } from "./client";
-import { datesForWeekdayInRange, localToUtc } from "@/lib/time";
+import {
+  datesForWeekdayInRange,
+  localToUtc,
+  formatTimeInTimezone,
+} from "@/lib/time";
+import { sendEmail } from "@/lib/email/client";
 
 function adminClient() {
   return createClient(
@@ -108,6 +113,175 @@ export const materializeDaily = inngest.createFunction(
     });
   }
 );
+
+// Day-of class reminder. Fires once per morning (UTC) and sends a single
+// reminder email per (student, session) for any session starting in the
+// next 18 hours where the student is still 'expected'. 18h matches a
+// typical morning-of cadence: a 7am CST cron fires at 12 UTC, catching
+// every class up through about 6am the next day in tenant-local time.
+//
+// Idempotency: Inngest's step.run is checkpointed, so within a single
+// execution we won't double-send. Across separate firings (manual
+// re-trigger), a parent could in rare cases receive two reminders for
+// the same session — acceptable for v1; we'll add dedup if it bites.
+export const dayOfRemindersFn = inngest.createFunction(
+  { id: "day-of-reminders", name: "Day-of class reminder emails" },
+  { cron: "0 12 * * *" }, // 12:00 UTC = ~7am CDT / 8am CST / 5am PDT
+  async ({ step }) => {
+    await step.run("send-reminders", async () => {
+      const supabase = adminClient();
+      const now = new Date();
+      const until = new Date(now.getTime() + 18 * 60 * 60 * 1000);
+
+      // Sessions within the window. Pulls everything needed for the
+      // email in a single embedded query.
+      const { data: sessions } = await supabase
+        .from("sessions")
+        .select(
+          "id, scheduled_start_utc, scheduled_end_utc, time_slots!inner(classrooms!inner(name, locations!inner(iana_timezone, tenants!inner(id, name))))"
+        )
+        .gte("scheduled_start_utc", now.toISOString())
+        .lte("scheduled_start_utc", until.toISOString())
+        .neq("status", "cancelled");
+
+      type SessionRow = {
+        id: string;
+        scheduled_start_utc: string;
+        scheduled_end_utc: string;
+        time_slots: {
+          classrooms: {
+            name: string;
+            locations: {
+              iana_timezone: string;
+              tenants: { id: string; name: string };
+            };
+          };
+        };
+      };
+      const ses = (sessions ?? []) as unknown as SessionRow[];
+      if (ses.length === 0) return { remindersSent: 0 };
+
+      // Map session_id -> session row for fast lookup.
+      const sessionById = new Map<string, SessionRow>();
+      for (const s of ses) sessionById.set(s.id, s);
+
+      // Attendance rows still 'expected' for these sessions.
+      const sessionIds = ses.map((s) => s.id);
+      const { data: attendance } = await supabase
+        .from("attendance_records")
+        .select("session_id, student_id")
+        .in("session_id", sessionIds)
+        .eq("status", "expected");
+
+      type AttRow = { session_id: string; student_id: string };
+      const att = (attendance ?? []) as unknown as AttRow[];
+      if (att.length === 0) return { remindersSent: 0 };
+
+      // Batch student lookup.
+      const studentIds = Array.from(new Set(att.map((a) => a.student_id)));
+      const { data: students } = await supabase
+        .from("students")
+        .select(
+          "id, first_name, last_name, primary_parent_name, primary_email, notification_prefs_json"
+        )
+        .in("id", studentIds);
+
+      type StudentRow = {
+        id: string;
+        first_name: string;
+        last_name: string;
+        primary_parent_name: string | null;
+        primary_email: string | null;
+        notification_prefs_json: { email?: boolean } | null;
+      };
+      const studentById = new Map<string, StudentRow>();
+      for (const s of (students ?? []) as unknown as StudentRow[]) {
+        studentById.set(s.id, s);
+      }
+
+      let sent = 0;
+      for (const row of att) {
+        const session = sessionById.get(row.session_id);
+        const student = studentById.get(row.student_id);
+        if (!session || !student) continue;
+
+        const wantsEmail = student.notification_prefs_json?.email !== false;
+        if (!wantsEmail || !student.primary_email) continue;
+
+        const tz = session.time_slots.classrooms.locations.iana_timezone;
+        const classroomName = session.time_slots.classrooms.name;
+        const tenantName = session.time_slots.classrooms.locations.tenants.name;
+        const studentName = `${student.first_name} ${student.last_name}`.trim();
+        const startLocal = formatTimeInTimezone(
+          session.scheduled_start_utc,
+          tz
+        );
+        const endLocal = formatTimeInTimezone(
+          session.scheduled_end_utc,
+          tz
+        );
+        const sessionDate = new Date(
+          session.scheduled_start_utc
+        ).toLocaleDateString("en-US", {
+          timeZone: tz,
+          weekday: "long",
+          month: "short",
+          day: "numeric",
+        });
+
+        const greeting = student.primary_parent_name
+          ? `Hi ${student.primary_parent_name},`
+          : "Hi there,";
+
+        const text = [
+          greeting,
+          "",
+          `Just a reminder: ${studentName} has class today.`,
+          "",
+          `  • ${sessionDate} ${startLocal} – ${endLocal} — ${classroomName}`,
+          "",
+          `See you there!`,
+          "",
+          `— ${tenantName}`,
+        ].join("\n");
+
+        const html = `<!doctype html>
+<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1.5;color:#1F2937;max-width:560px;margin:0 auto;padding:24px;">
+  <p style="margin:0 0 16px;">${escHtml(greeting)}</p>
+  <p style="margin:0 0 16px;">Just a reminder: <strong>${escHtml(studentName)}</strong> has class today.</p>
+  <div style="background:#FBFAF7;border:1px solid #E5E7EB;border-left:3px solid #1AA876;border-radius:6px;padding:12px 16px;margin:0 0 16px;">
+    <p style="margin:0;font-size:14px;">
+      <strong>${escHtml(sessionDate)}</strong>
+      &nbsp;<span style="font-family:ui-monospace,Menlo,monospace;font-weight:600;">${startLocal} – ${endLocal}</span>
+    </p>
+    <p style="margin:4px 0 0;font-size:13px;color:#6B7280;">${escHtml(classroomName)}</p>
+  </div>
+  <p style="margin:0 0 16px;">See you there!</p>
+  <p style="margin:0;color:#6B7280;font-size:13px;">— ${escHtml(tenantName)}</p>
+</body></html>`;
+
+        const res = await sendEmail({
+          to: student.primary_email,
+          subject: `Reminder: ${studentName} has class today`,
+          text,
+          html,
+        });
+        if ("ok" in res && res.ok) sent++;
+      }
+
+      return { remindersSent: sent };
+    });
+  }
+);
+
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 // Marks any 'expected' attendance as 'absent' when the session ended at least
 // 30 minutes ago (BA 8.9 absence detection). Runs every 15 minutes.

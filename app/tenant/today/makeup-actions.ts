@@ -9,6 +9,8 @@ import {
   createSupabaseServiceClient,
 } from "@/lib/supabase/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
+import { sendEmail } from "@/lib/email/client";
+import { formatTimeInTimezone } from "@/lib/time";
 
 function canOfferMakeup(role: string | null | undefined) {
   return (
@@ -104,9 +106,131 @@ export async function offerMakeupAction(formData: FormData) {
   // Surface the raw token URL once via query string so the front desk can copy
   // it and share with the parent. (Tokens are never stored unhashed.)
   const url = `${process.env.NEXT_PUBLIC_APP_URL || ""}/makeup/${raw}`;
+
+  // Also email the parent so they don't depend on the admin's copy/paste.
+  fireMakeupOfferEmail({
+    studentId: r!.student_id,
+    offeredSessionId: nextSession!.id,
+    url,
+  }).catch((err) => console.error("[makeup] email failed:", err));
+
   redirect(
     `/tenant/makeups?makeup_url=${encodeURIComponent(url)}`
   );
+}
+
+async function fireMakeupOfferEmail(args: {
+  studentId: string;
+  offeredSessionId: string;
+  url: string;
+}) {
+  const service = createSupabaseServiceClient();
+
+  const [studentRes, sessionRes] = await Promise.all([
+    service
+      .from("students")
+      .select(
+        "first_name, last_name, primary_parent_name, primary_email, notification_prefs_json"
+      )
+      .eq("id", args.studentId)
+      .maybeSingle(),
+    service
+      .from("sessions")
+      .select(
+        "scheduled_start_utc, scheduled_end_utc, time_slots!inner(classrooms!inner(name, locations!inner(iana_timezone, tenants!inner(name))))"
+      )
+      .eq("id", args.offeredSessionId)
+      .maybeSingle(),
+  ]);
+
+  type SRow = {
+    first_name: string;
+    last_name: string;
+    primary_parent_name: string | null;
+    primary_email: string | null;
+    notification_prefs_json: { email?: boolean } | null;
+  };
+  type SesRow = {
+    scheduled_start_utc: string;
+    scheduled_end_utc: string;
+    time_slots: {
+      classrooms: {
+        name: string;
+        locations: {
+          iana_timezone: string;
+          tenants: { name: string };
+        };
+      };
+    };
+  };
+
+  const student = studentRes.data as unknown as SRow | null;
+  const session = sessionRes.data as unknown as SesRow | null;
+  if (!student || !session) return;
+  if (!student.primary_email) return;
+  if (student.notification_prefs_json?.email === false) return;
+
+  const tz = session.time_slots.classrooms.locations.iana_timezone;
+  const classroomName = session.time_slots.classrooms.name;
+  const tenantName = session.time_slots.classrooms.locations.tenants.name;
+  const studentName = `${student.first_name} ${student.last_name}`.trim();
+  const startLocal = formatTimeInTimezone(session.scheduled_start_utc, tz);
+  const endLocal = formatTimeInTimezone(session.scheduled_end_utc, tz);
+  const sessionDate = new Date(session.scheduled_start_utc).toLocaleDateString(
+    "en-US",
+    { timeZone: tz, weekday: "long", month: "short", day: "numeric" }
+  );
+
+  const greeting = student.primary_parent_name
+    ? `Hi ${student.primary_parent_name},`
+    : "Hi there,";
+
+  const text = [
+    greeting,
+    "",
+    `We'd like to offer ${studentName} a make-up class:`,
+    "",
+    `  • ${sessionDate} ${startLocal} – ${endLocal} — ${classroomName}`,
+    "",
+    `Tap the link below to accept or decline — the offer expires in 7 days:`,
+    args.url,
+    "",
+    `— ${tenantName}`,
+  ].join("\n");
+
+  const html = `<!doctype html>
+<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1.5;color:#1F2937;max-width:560px;margin:0 auto;padding:24px;">
+  <p style="margin:0 0 16px;">${escMakeup(greeting)}</p>
+  <p style="margin:0 0 16px;">We'd like to offer <strong>${escMakeup(studentName)}</strong> a make-up class:</p>
+  <div style="background:#FFF7ED;border:1px solid #FED7AA;border-left:3px solid #F97316;border-radius:6px;padding:12px 16px;margin:0 0 20px;">
+    <p style="margin:0;font-size:14px;">
+      <strong>${escMakeup(sessionDate)}</strong>
+      &nbsp;<span style="font-family:ui-monospace,Menlo,monospace;font-weight:600;">${startLocal} – ${endLocal}</span>
+    </p>
+    <p style="margin:4px 0 0;font-size:13px;color:#6B7280;">${escMakeup(classroomName)}</p>
+  </div>
+  <p style="margin:0 0 16px;">
+    <a href="${escMakeup(args.url)}" style="display:inline-block;background-image:linear-gradient(180deg,#2BC98A 0%,#1AA876 55%,#0B6845 100%);color:#fff;font-weight:600;padding:10px 18px;border-radius:6px;text-decoration:none;">Accept or decline</a>
+  </p>
+  <p style="margin:0 0 16px;color:#6B7280;font-size:13px;">This offer expires in 7 days.</p>
+  <p style="margin:0;color:#6B7280;font-size:13px;">— ${escMakeup(tenantName)}</p>
+</body></html>`;
+
+  await sendEmail({
+    to: student.primary_email,
+    subject: `Make-up class offered for ${studentName}`,
+    text,
+    html,
+  });
+}
+
+function escMakeup(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 // ============ Admin-driven make-up: pick N sessions explicitly ============
