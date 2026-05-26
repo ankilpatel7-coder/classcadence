@@ -1,4 +1,5 @@
-import { CalendarDays, CheckCheck, Sparkles, StickyNote } from "lucide-react";
+import { Fragment } from "react";
+import { CalendarDays, CheckCheck } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import {
@@ -6,12 +7,9 @@ import {
   localToUtc,
   todayInTimezone,
 } from "@/lib/time";
-import { AttendanceRowActions } from "./AttendanceRowActions";
 import { checkInAllExpectedAction } from "./actions";
 import { loadSessionsInWindow } from "./load-sessions";
-import { StudentAvatar } from "@/app/_components/StudentAvatar";
-import { StatusBadge } from "@/app/_components/StatusIcon";
-import { LiveTimer } from "@/app/_components/LiveTimer";
+import { StudentTableRow, StudentCard } from "./StudentRowClient";
 import { LessonNoteWidget } from "./LessonNoteWidget";
 
 export const metadata = { title: "Today — ClassCadence" };
@@ -242,15 +240,42 @@ export default async function TodayPage({
               {rows.map((r, idx) => {
                 const prev = idx > 0 ? rows[idx - 1] : null;
                 const isNewSession = !prev || prev.sessionId !== r.sessionId;
+                const startLocal = formatTimeInTimezone(r.startUtc, r.tz);
+                const endLocal = formatTimeInTimezone(r.endUtc, r.tz);
                 return (
-                  <Row
-                    key={r.attendanceId}
-                    r={r}
-                    isFirstOfSession={isNewSession}
-                    sessionExpected={
-                      sessionMeta.get(r.sessionId)?.expected ?? 0
-                    }
-                  />
+                  <Fragment key={r.attendanceId}>
+                    {isNewSession ? (
+                      <SessionHeaderRow
+                        sessionId={r.sessionId}
+                        classroomName={r.classroomName}
+                        classroomColor={r.classroomColor}
+                        startLocal={startLocal}
+                        endLocal={endLocal}
+                        sessionExpected={
+                          sessionMeta.get(r.sessionId)?.expected ?? 0
+                        }
+                      />
+                    ) : null}
+                    <StudentTableRow
+                      attendanceId={r.attendanceId}
+                      status={r.status}
+                      checkInAt={r.checkInAt}
+                      checkOutAt={r.checkOutAt}
+                      startLocal={startLocal}
+                      endLocal={endLocal}
+                      classroomName={r.classroomName}
+                      classroomColor={r.classroomColor}
+                      firstName={r.firstName}
+                      lastName={r.lastName}
+                      isMakeup={r.isMakeup}
+                      isManual={r.isManual}
+                      notes={r.notes.map((n) => ({
+                        body: n.body,
+                        visibility: n.visibility,
+                        createdAt: n.created_at,
+                      }))}
+                    />
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -258,62 +283,44 @@ export default async function TodayPage({
 
           {/* Mobile card list */}
           <ul className="divide-y divide-line md:hidden">
-            {rows.map((r) => (
-              <li
-                key={r.attendanceId}
-                className="space-y-2 p-3"
-                style={{
-                  borderLeft: `4px solid ${r.classroomColor}`,
-                }}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <StudentAvatar
-                      name={`${r.firstName} ${r.lastName}`}
-                      size={26}
-                    />
-                    <div>
-                      <p className="flex items-center gap-1.5 text-sm font-medium text-ink">
-                        {r.firstName} {r.lastName}
-                        {r.isMakeup ? (
-                          <span className="inline-flex items-center gap-0.5 rounded-full bg-primary-soft px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary-strong">
-                            <Sparkles className="h-2.5 w-2.5" />
-                            Make-up
-                          </span>
-                        ) : null}
-                      </p>
-                      <p className="text-[10px] text-muted">
-                        {formatTimeInTimezone(r.startUtc, r.tz)}–
-                        {formatTimeInTimezone(r.endUtc, r.tz)} · {r.classroomName}
-                      </p>
-                      {r.checkInAt ? (
-                        <div className="mt-1">
-                          <LiveTimer since={r.checkInAt} until={r.checkOutAt} />
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                  <StatusBadge status={r.status} />
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <AttendanceRowActions
+            {rows.map((r) => {
+              const startLocal = formatTimeInTimezone(r.startUtc, r.tz);
+              const endLocal = formatTimeInTimezone(r.endUtc, r.tz);
+              return (
+                <Fragment key={r.attendanceId}>
+                  <StudentCard
                     attendanceId={r.attendanceId}
                     status={r.status}
-                    checkedIn={!!r.checkInAt}
-                    checkedOut={!!r.checkOutAt}
+                    checkInAt={r.checkInAt}
+                    checkOutAt={r.checkOutAt}
+                    startLocal={startLocal}
+                    endLocal={endLocal}
+                    classroomName={r.classroomName}
+                    classroomColor={r.classroomColor}
+                    firstName={r.firstName}
+                    lastName={r.lastName}
+                    isMakeup={r.isMakeup}
+                    isManual={r.isManual}
+                    notes={r.notes.map((n) => ({
+                      body: n.body,
+                      visibility: n.visibility,
+                      createdAt: n.created_at,
+                    }))}
                   />
-                </div>
-                <LessonNoteWidget
-                  attendanceId={r.attendanceId}
-                  existingNotes={r.notes.map((n) => ({
-                    body: n.body,
-                    visibility:
-                      n.visibility === "parent" ? "parent" : "internal",
-                    createdAt: n.created_at,
-                  }))}
-                />
-              </li>
-            ))}
+                  <li className="px-3 pb-3">
+                    <LessonNoteWidget
+                      attendanceId={r.attendanceId}
+                      existingNotes={r.notes.map((n) => ({
+                        body: n.body,
+                        visibility:
+                          n.visibility === "parent" ? "parent" : "internal",
+                        createdAt: n.created_at,
+                      }))}
+                    />
+                  </li>
+                </Fragment>
+              );
+            })}
           </ul>
         </div>
       )}
@@ -321,158 +328,58 @@ export default async function TodayPage({
   );
 }
 
-function Row({
-  r,
-  isFirstOfSession,
+function SessionHeaderRow({
+  sessionId,
+  classroomName,
+  classroomColor,
+  startLocal,
+  endLocal,
   sessionExpected,
 }: {
-  r: {
-    attendanceId: string;
-    sessionId: string;
-    startUtc: string;
-    endUtc: string;
-    tz: string;
-    classroomName: string;
-    classroomColor: string;
-    locationName: string;
-    firstName: string;
-    lastName: string;
-    status: string;
-    checkInAt: string | null;
-    checkOutAt: string | null;
-    isMakeup: boolean;
-    isManual: boolean;
-    notes: { body: string; visibility: string; created_at: string }[];
-  };
-  isFirstOfSession: boolean;
+  sessionId: string;
+  classroomName: string;
+  classroomColor: string;
+  startLocal: string;
+  endLocal: string;
   sessionExpected: number;
 }) {
   return (
-    <>
-      {isFirstOfSession ? (
-        <tr
-          style={{
-            backgroundImage: `linear-gradient(90deg, ${r.classroomColor}1A 0%, ${r.classroomColor}08 40%, transparent 100%)`,
-            borderLeft: `3px solid ${r.classroomColor}`,
-          }}
-        >
-          <td colSpan={5} className="px-4 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <span
-                  className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-surface"
-                  style={{ backgroundColor: r.classroomColor }}
-                />
-                <p className="font-mono text-base font-bold tabular-nums text-ink">
-                  {formatTimeInTimezone(r.startUtc, r.tz)}
-                  <span className="text-muted">–</span>
-                  {formatTimeInTimezone(r.endUtc, r.tz)}
-                </p>
-                <span className="text-muted">·</span>
-                <p className="text-sm font-semibold text-ink/85">
-                  {r.classroomName}
-                </p>
-              </div>
-              {sessionExpected > 0 ? (
-                <form action={checkInAllExpectedAction}>
-                  <input type="hidden" name="session_id" value={r.sessionId} />
-                  <button
-                    type="submit"
-                    className="inline-flex items-center gap-1.5 rounded-full bg-success px-3.5 py-1.5 text-xs font-semibold text-white shadow-emboss transition hover:-translate-y-px hover:brightness-110"
-                  >
-                    <CheckCheck className="h-3.5 w-3.5" />
-                    Check in all ({sessionExpected})
-                  </button>
-                </form>
-              ) : null}
-            </div>
-          </td>
-        </tr>
-      ) : null}
-
-      <tr className="transition hover:bg-primary-soft/20">
-        <td className="px-4 py-3.5 text-sm font-semibold text-ink tabular-nums">
-          {formatTimeInTimezone(r.startUtc, r.tz)}
-        </td>
-        <td className="px-4 py-3.5">
-          <span className="inline-flex items-center gap-2 text-sm text-ink/70">
-            <span
-              className="inline-block h-1.5 w-1.5 rounded-full"
-              style={{ backgroundColor: r.classroomColor }}
-            />
-            {r.classroomName}
-          </span>
-        </td>
-        <td className="px-4 py-3.5">
+    <tr
+      style={{
+        backgroundImage: `linear-gradient(90deg, ${classroomColor}1A 0%, ${classroomColor}08 40%, transparent 100%)`,
+        borderLeft: `3px solid ${classroomColor}`,
+      }}
+    >
+      <td colSpan={5} className="px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <StudentAvatar
-              name={`${r.firstName} ${r.lastName}`}
-              size={36}
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-surface"
+              style={{ backgroundColor: classroomColor }}
             />
-            <div>
-              <p className="flex flex-wrap items-center gap-1.5 text-base font-semibold text-ink">
-                {r.firstName} {r.lastName}
-                {r.isMakeup ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-primary-strong">
-                    <Sparkles className="h-3 w-3" />
-                    Make-up
-                  </span>
-                ) : null}
-                {r.isManual ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-accent">
-                    <Sparkles className="h-3 w-3" />
-                    Manual
-                  </span>
-                ) : null}
-              </p>
-              {r.checkInAt ? (
-                <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
-                  <span>
-                    In{" "}
-                    {new Date(r.checkInAt).toLocaleTimeString("en-US", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                  <LiveTimer since={r.checkInAt} until={r.checkOutAt} />
-                  {r.checkOutAt ? (
-                    <span>
-                      Out{" "}
-                      {new Date(r.checkOutAt).toLocaleTimeString("en-US", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
+            <p className="font-mono text-base font-bold tabular-nums text-ink">
+              {startLocal}
+              <span className="text-muted">–</span>
+              {endLocal}
+            </p>
+            <span className="text-muted">·</span>
+            <p className="text-sm font-semibold text-ink/85">{classroomName}</p>
           </div>
-        </td>
-        <td className="px-4 py-3.5">
-          <StatusBadge status={r.status} />
-        </td>
-        <td className="px-4 py-3.5 text-right">
-          <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
-            <AttendanceRowActions
-              attendanceId={r.attendanceId}
-              status={r.status}
-              checkedIn={!!r.checkInAt}
-              checkedOut={!!r.checkOutAt}
-            />
-            {r.notes.length > 0 ? (
-              <span
-                className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2 py-1 text-[10px] text-muted"
-                title={r.notes.map((n) => n.body).join("\n")}
+          {sessionExpected > 0 ? (
+            <form action={checkInAllExpectedAction}>
+              <input type="hidden" name="session_id" value={sessionId} />
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 rounded-full bg-success px-3.5 py-1.5 text-xs font-semibold text-white shadow-emboss transition hover:-translate-y-px hover:brightness-110"
               >
-                <StickyNote className="h-3 w-3" />
-                {r.notes.length}
-              </span>
-            ) : null}
-          </div>
-        </td>
-      </tr>
-    </>
+                <CheckCheck className="h-3.5 w-3.5" />
+                Check in all ({sessionExpected})
+              </button>
+            </form>
+          ) : null}
+        </div>
+      </td>
+    </tr>
   );
 }
 
