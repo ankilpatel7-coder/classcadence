@@ -1,7 +1,6 @@
 "use client";
 
-import { useOptimistic, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   Check,
   LogOut,
@@ -94,38 +93,40 @@ const META: Record<Action, ButtonMeta> = {
 };
 
 function useRowState(initial: RowState, attendanceId: string) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [state, applyOptimistic] = useOptimistic<RowState, Action>(
-    initial,
-    reduce
-  );
+  // Plain client state: lives until the page navigates away, so we never
+  // need to call router.refresh(). The server action runs in the
+  // background; if it fails we roll back. revalidatePath in the action
+  // keeps the next fresh navigation honest.
+  const [state, setState] = useState<RowState>(initial);
 
   function dispatch(action: Action) {
-    startTransition(async () => {
-      applyOptimistic(action);
-      const fd = new FormData();
-      fd.set("attendance_id", attendanceId);
-      fd.set("action", action);
-      const result = await updateAttendanceAction(fd);
-      if (!result?.ok) {
-        console.error("[attendance] update failed:", result?.error);
-      }
-      router.refresh();
-    });
+    const prev = state;
+    setState((s) => reduce(s, action));
+    const fd = new FormData();
+    fd.set("attendance_id", attendanceId);
+    fd.set("action", action);
+    updateAttendanceAction(fd)
+      .then((result) => {
+        if (!result?.ok) {
+          console.error("[attendance] update failed:", result?.error);
+          setState(prev);
+        }
+      })
+      .catch((err) => {
+        console.error("[attendance] update threw:", err);
+        setState(prev);
+      });
   }
 
-  return { state, dispatch, isPending };
+  return { state, dispatch };
 }
 
 function ActionButton({
   action,
   onClick,
-  pending,
 }: {
   action: Action;
   onClick: () => void;
-  pending: boolean;
 }) {
   const { label, icon: Icon, classes, style } = META[action];
   return (
@@ -133,7 +134,7 @@ function ActionButton({
       type="button"
       onClick={onClick}
       style={style}
-      className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition disabled:opacity-60 ${classes} ${pending ? "opacity-80" : ""}`}
+      className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition disabled:opacity-60 ${classes}`}
     >
       <Icon className="h-4 w-4" />
       {label}
@@ -144,30 +145,28 @@ function ActionButton({
 function ActionButtons({
   state,
   dispatch,
-  pending,
 }: {
   state: RowState;
   dispatch: (a: Action) => void;
-  pending: boolean;
 }) {
   const checkedIn = !!state.checkInAt;
   const checkedOut = !!state.checkOutAt;
   return (
     <div className="flex flex-wrap items-center justify-end gap-1.5">
       {!checkedIn && state.status !== "absent" && state.status !== "excused" ? (
-        <ActionButton action="check_in" onClick={() => dispatch("check_in")} pending={pending} />
+        <ActionButton action="check_in" onClick={() => dispatch("check_in")} />
       ) : null}
       {checkedIn && !checkedOut ? (
-        <ActionButton action="check_out" onClick={() => dispatch("check_out")} pending={pending} />
+        <ActionButton action="check_out" onClick={() => dispatch("check_out")} />
       ) : null}
       {state.status === "expected" || state.status === "late" ? (
-        <ActionButton action="mark_absent" onClick={() => dispatch("mark_absent")} pending={pending} />
+        <ActionButton action="mark_absent" onClick={() => dispatch("mark_absent")} />
       ) : null}
       {state.status !== "excused" ? (
-        <ActionButton action="mark_excused" onClick={() => dispatch("mark_excused")} pending={pending} />
+        <ActionButton action="mark_excused" onClick={() => dispatch("mark_excused")} />
       ) : null}
       {state.status !== "expected" ? (
-        <ActionButton action="reset" onClick={() => dispatch("reset")} pending={pending} />
+        <ActionButton action="reset" onClick={() => dispatch("reset")} />
       ) : null}
     </div>
   );
@@ -197,7 +196,7 @@ export type StudentRowProps = {
 };
 
 export function StudentTableRow(props: StudentRowProps) {
-  const { state, dispatch, isPending } = useRowState(
+  const { state, dispatch } = useRowState(
     {
       status: props.status,
       checkInAt: props.checkInAt,
@@ -256,7 +255,7 @@ export function StudentTableRow(props: StudentRowProps) {
       </td>
       <td className="px-4 py-3.5 text-right">
         <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
-          <ActionButtons state={state} dispatch={dispatch} pending={isPending} />
+          <ActionButtons state={state} dispatch={dispatch} />
           {props.notes.length > 0 ? (
             <span
               className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2 py-1 text-[10px] text-muted"
@@ -273,7 +272,7 @@ export function StudentTableRow(props: StudentRowProps) {
 }
 
 export function StudentCard(props: StudentRowProps) {
-  const { state, dispatch, isPending } = useRowState(
+  const { state, dispatch } = useRowState(
     {
       status: props.status,
       checkInAt: props.checkInAt,
@@ -313,7 +312,7 @@ export function StudentCard(props: StudentRowProps) {
         <StatusBadge status={state.status} />
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        <ActionButtons state={state} dispatch={dispatch} pending={isPending} />
+        <ActionButtons state={state} dispatch={dispatch} />
       </div>
     </li>
   );
