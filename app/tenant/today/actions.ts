@@ -174,15 +174,19 @@ const AttendanceUpdateSchema = z.object({
   action: z.enum(["check_in", "check_out", "mark_absent", "mark_excused", "reset"]),
 });
 
-export async function updateAttendanceAction(formData: FormData) {
+export type AttendanceUpdateResult = { ok: true } | { ok: false; error: string };
+
+export async function updateAttendanceAction(
+  formData: FormData
+): Promise<AttendanceUpdateResult> {
   const user = await getCurrentUserOrRedirect();
-  if (!canWriteAttendance(user.role)) redirect("/tenant/today?error=forbidden");
+  if (!canWriteAttendance(user.role)) return { ok: false, error: "forbidden" };
 
   const parsed = AttendanceUpdateSchema.safeParse({
     attendance_id: formData.get("attendance_id"),
     action: formData.get("action"),
   });
-  if (!parsed.success) redirect("/tenant/today?error=invalid-input");
+  if (!parsed.success) return { ok: false, error: "invalid-input" };
 
   const supabase = createSupabaseServerClient();
   const nowIso = new Date().toISOString();
@@ -214,9 +218,8 @@ export async function updateAttendanceAction(formData: FormData) {
     .from("attendance_records")
     .update(updates)
     .eq("id", parsed.data.attendance_id);
-  if (error) redirect(`/tenant/today?error=${encodeURIComponent(error.message)}`);
+  if (error) return { ok: false, error: error.message };
 
-  // Absent alert — fire-and-forget so it never blocks the redirect.
   if (parsed.data.action === "mark_absent" && user.tenantId) {
     fireAbsentNotification({
       tenantId: user.tenantId,
@@ -227,7 +230,7 @@ export async function updateAttendanceAction(formData: FormData) {
   }
 
   revalidatePath("/tenant/today");
-  redirect("/tenant/today");
+  return { ok: true };
 }
 
 async function fireAbsentNotification(args: {
@@ -474,5 +477,4 @@ export async function checkInAllExpectedAction(formData: FormData) {
   if (error) redirect(`/tenant/today?error=${encodeURIComponent(error.message)}`);
 
   revalidatePath("/tenant/today");
-  redirect("/tenant/today");
 }

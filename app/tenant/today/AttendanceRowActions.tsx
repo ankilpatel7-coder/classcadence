@@ -1,10 +1,32 @@
 "use client";
 
-import { useFormStatus } from "react-dom";
+import { useOptimistic, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Check, LogOut, CircleSlash, FilePen, RotateCcw } from "lucide-react";
 import { updateAttendanceAction } from "./actions";
 
 type Action = "check_in" | "check_out" | "mark_absent" | "mark_excused" | "reset";
+
+type RowState = {
+  status: string;
+  checkedIn: boolean;
+  checkedOut: boolean;
+};
+
+function reduce(state: RowState, action: Action): RowState {
+  switch (action) {
+    case "check_in":
+      return { ...state, status: "present", checkedIn: true };
+    case "check_out":
+      return { ...state, checkedOut: true };
+    case "mark_absent":
+      return { ...state, status: "absent" };
+    case "mark_excused":
+      return { ...state, status: "excused" };
+    case "reset":
+      return { status: "expected", checkedIn: false, checkedOut: false };
+  }
+}
 
 type Meta = {
   label: string;
@@ -54,22 +76,6 @@ const META: Record<Action, Meta> = {
   },
 };
 
-function PendingButton({ action }: { action: Action }) {
-  const { pending } = useFormStatus();
-  const { label, icon: Icon, classes, style } = META[action];
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      style={style}
-      className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition disabled:opacity-60 ${classes}`}
-    >
-      <Icon className="h-4 w-4" />
-      {pending ? "…" : label}
-    </button>
-  );
-}
-
 export function AttendanceRowActions({
   attendanceId,
   status,
@@ -81,39 +87,67 @@ export function AttendanceRowActions({
   checkedIn: boolean;
   checkedOut: boolean;
 }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [state, applyOptimistic] = useOptimistic<RowState, Action>(
+    { status, checkedIn, checkedOut },
+    reduce
+  );
+
+  function dispatch(action: Action) {
+    startTransition(async () => {
+      applyOptimistic(action);
+      const fd = new FormData();
+      fd.set("attendance_id", attendanceId);
+      fd.set("action", action);
+      const result = await updateAttendanceAction(fd);
+      if (!result?.ok) {
+        console.error("[attendance] update failed:", result?.error);
+      }
+      router.refresh();
+    });
+  }
+
   return (
     <div className="flex flex-wrap items-center justify-end gap-1.5">
-      {!checkedIn && status !== "absent" && status !== "excused" ? (
-        <ActionForm attendanceId={attendanceId} action="check_in" />
+      {!state.checkedIn && state.status !== "absent" && state.status !== "excused" ? (
+        <ActionButton action="check_in" onClick={() => dispatch("check_in")} pending={isPending} />
       ) : null}
-      {checkedIn && !checkedOut ? (
-        <ActionForm attendanceId={attendanceId} action="check_out" />
+      {state.checkedIn && !state.checkedOut ? (
+        <ActionButton action="check_out" onClick={() => dispatch("check_out")} pending={isPending} />
       ) : null}
-      {status === "expected" || status === "late" ? (
-        <ActionForm attendanceId={attendanceId} action="mark_absent" />
+      {state.status === "expected" || state.status === "late" ? (
+        <ActionButton action="mark_absent" onClick={() => dispatch("mark_absent")} pending={isPending} />
       ) : null}
-      {status !== "excused" ? (
-        <ActionForm attendanceId={attendanceId} action="mark_excused" />
+      {state.status !== "excused" ? (
+        <ActionButton action="mark_excused" onClick={() => dispatch("mark_excused")} pending={isPending} />
       ) : null}
-      {status !== "expected" ? (
-        <ActionForm attendanceId={attendanceId} action="reset" />
+      {state.status !== "expected" ? (
+        <ActionButton action="reset" onClick={() => dispatch("reset")} pending={isPending} />
       ) : null}
     </div>
   );
 }
 
-function ActionForm({
-  attendanceId,
+function ActionButton({
   action,
+  onClick,
+  pending,
 }: {
-  attendanceId: string;
   action: Action;
+  onClick: () => void;
+  pending: boolean;
 }) {
+  const { label, icon: Icon, classes, style } = META[action];
   return (
-    <form action={updateAttendanceAction}>
-      <input type="hidden" name="attendance_id" value={attendanceId} />
-      <input type="hidden" name="action" value={action} />
-      <PendingButton action={action} />
-    </form>
+    <button
+      type="button"
+      onClick={onClick}
+      style={style}
+      className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition disabled:opacity-60 ${classes} ${pending ? "opacity-80" : ""}`}
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </button>
   );
 }
