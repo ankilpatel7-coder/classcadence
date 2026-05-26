@@ -10,7 +10,6 @@ import {
   Sparkles,
   StickyNote,
 } from "lucide-react";
-import { updateAttendanceAction } from "./actions";
 import { StudentAvatar } from "@/app/_components/StudentAvatar";
 import { StatusBadge } from "@/app/_components/StatusIcon";
 import { LiveTimer } from "@/app/_components/LiveTimer";
@@ -102,13 +101,15 @@ function useRowState(initial: RowState, attendanceId: string) {
   function dispatch(action: Action) {
     const prev = state;
     setState((s) => reduce(s, action));
-    const fd = new FormData();
-    fd.set("attendance_id", attendanceId);
-    fd.set("action", action);
-    updateAttendanceAction(fd)
-      .then((result) => {
-        if (!result?.ok) {
-          console.error("[attendance] update failed:", result?.error);
+    fetch("/api/attendance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attendance_id: attendanceId, action }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          console.error("[attendance] update failed:", res.status, text);
           setState(prev);
         }
       })
