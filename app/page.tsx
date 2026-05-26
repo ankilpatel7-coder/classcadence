@@ -110,10 +110,10 @@ function Nav() {
 function Hero() {
   return (
     <section className="max-w-[1200px] mx-auto px-6 pt-20 md:pt-28 pb-16 text-center">
-      <h1 className="text-[#202124] font-medium leading-[1.1] tracking-[-0.02em] text-[44px] md:text-[64px]">
-        The rhythm of every
+      <h1 className="text-[#202124] font-bold leading-[1.05] tracking-[-0.025em] text-[48px] md:text-[72px]">
+        The Rhythm of Every
         <br />
-        great learning center.
+        Great Learning Center.
       </h1>
       <p className="mt-6 mx-auto max-w-[680px] text-[18px] md:text-[20px] text-[#5F6368] leading-[1.5]">
         Daily check-ins, automatic absence detection, and parent email reminders — all in one
@@ -180,7 +180,7 @@ function TrustStrip() {
 function TrustBlock({ label, body }: { label: string; body: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-[0.08em] text-[#80868B] font-medium">
+      <p className="text-[11px] uppercase tracking-[0.08em] text-[#80868B] font-bold">
         {label}
       </p>
       <div className="mt-1.5 text-[14px] text-[#202124]">{body}</div>
@@ -207,9 +207,11 @@ function SectionHead({
   return (
     <div className="text-center mb-14 max-w-[720px] mx-auto">
       {eyebrow ? (
-        <p className="text-[13px] font-medium text-[#1A73E8] mb-3">{eyebrow}</p>
+        <p className="text-[13px] font-bold uppercase tracking-[0.08em] text-[#1A73E8] mb-3">
+          {eyebrow}
+        </p>
       ) : null}
-      <h2 className="text-[#202124] font-medium leading-[1.15] tracking-[-0.015em] text-[32px] md:text-[44px]">
+      <h2 className="text-[#202124] font-bold leading-[1.1] tracking-[-0.02em] text-[36px] md:text-[52px]">
         {title}
       </h2>
       {body ? (
@@ -229,7 +231,7 @@ function Features() {
     <section id="features" className="max-w-[1200px] mx-auto px-6 py-24 md:py-28">
       <SectionHead
         eyebrow="Capabilities"
-        title={<>Everything your center runs on, in one place.</>}
+        title={<>Everything Your Center Runs On, In One Place.</>}
         body="Built to replace the clipboard, the group text, and the spreadsheet — without replacing the human touch that keeps families coming back."
       />
 
@@ -307,7 +309,7 @@ function FeatureCard({
       >
         <Icon size={22} />
       </div>
-      <h3 className="text-[20px] text-[#202124] font-medium mb-2 tracking-tight">
+      <h3 className="text-[20px] text-[#202124] font-bold mb-2 tracking-tight">
         {title}
       </h3>
       <p className="text-[14px] text-[#5F6368] leading-[1.6]">{body}</p>
@@ -324,11 +326,11 @@ function ParentComms() {
       <div className="max-w-[1200px] mx-auto px-6 py-24 md:py-28">
         <div className="grid md:grid-cols-2 gap-12 md:gap-20 items-center">
           <div>
-            <p className="text-[13px] font-medium text-[#1A73E8] mb-3">
-              Stay in sync
+            <p className="text-[13px] font-bold uppercase tracking-[0.08em] text-[#1A73E8] mb-3">
+              Stay In Sync
             </p>
-            <h2 className="text-[#202124] font-medium leading-[1.15] tracking-[-0.015em] text-[32px] md:text-[44px]">
-              Parents stay informed. You stay focused.
+            <h2 className="text-[#202124] font-bold leading-[1.1] tracking-[-0.02em] text-[36px] md:text-[52px]">
+              Parents Stay Informed. You Stay Focused.
             </h2>
             <p className="mt-5 text-[16px] md:text-[18px] text-[#5F6368] leading-[1.5]">
               Every reminder, absence alert, and make-up offer is sent automatically — branded as
@@ -380,15 +382,15 @@ function HowItWorks() {
     <section id="how" className="bg-white">
       <div className="max-w-[1200px] mx-auto px-6 py-24 md:py-28">
         <SectionHead
-          eyebrow="How it works"
-          title={<>Paper to digital, in one evening.</>}
+          eyebrow="How It Works"
+          title={<>Paper to Digital, In One Evening.</>}
         />
 
         <div className="grid md:grid-cols-3 gap-5">
           <StepCard
             n={1}
             tone="blue"
-            title="Set up your center"
+            title="Set Up Your Center"
             body="Add operating hours, classrooms, and weekly time slots. Upload your logo and pick your brand color. Invite your team."
           >
             <StepMockSchedule />
@@ -396,7 +398,7 @@ function HowItWorks() {
           <StepCard
             n={2}
             tone="green"
-            title="Add your students"
+            title="Add Your Students"
             body="Enter each student once — parent contact info lives right on the record. Assign them to a classroom and time slot. Their parent gets a confirmation email automatically."
           >
             <StepMockImport />
@@ -404,7 +406,7 @@ function HowItWorks() {
           <StepCard
             n={3}
             tone="yellow"
-            title="Run calmer"
+            title="Run Calmer"
             body="The Today page opens to the next session. Check-ins are one tap. Reminders fire each morning. Make-ups never slip through the cracks."
           >
             <StepMockReminder />
@@ -438,7 +440,7 @@ function StepCard({
         >
           {n}
         </div>
-        <h3 className="text-[20px] text-[#202124] font-medium mb-2 tracking-tight">
+        <h3 className="text-[20px] text-[#202124] font-bold mb-2 tracking-tight">
           {title}
         </h3>
         <p className="text-[14px] text-[#5F6368] leading-[1.6]">{body}</p>
@@ -456,10 +458,10 @@ function Stats() {
     <section className="bg-[#F8F9FA] border-y border-[#DADCE0]">
       <div className="max-w-[1200px] mx-auto px-6 py-20">
         <div className="grid md:grid-cols-3 gap-10 text-center">
-          <Stat figure="One tap" label="To check a student in. No paper, no clipboard." />
+          <Stat figure="One Tap" label="To check a student in. No paper, no clipboard." />
           <Stat figure="Automatic" label="Absence detection — no admin has to remember." />
           <Stat
-            figure="One evening"
+            figure="One Evening"
             label="From signing up to the first real check-in."
           />
         </div>
@@ -471,7 +473,7 @@ function Stats() {
 function Stat({ figure, label }: { figure: string; label: string }) {
   return (
     <div>
-      <p className="text-[#1A73E8] font-medium text-[40px] md:text-[48px] tracking-[-0.02em] leading-tight">
+      <p className="text-[#1A73E8] font-bold text-[44px] md:text-[56px] tracking-[-0.025em] leading-tight">
         {figure}
       </p>
       <p className="mt-2 text-[14px] text-[#5F6368] leading-[1.5] max-w-[260px] mx-auto">
@@ -488,8 +490,8 @@ function CTAStrip() {
   return (
     <section className="bg-[#1A73E8] text-white">
       <div className="max-w-[1000px] mx-auto px-6 py-20 md:py-24 text-center">
-        <h2 className="font-medium text-[32px] md:text-[44px] leading-[1.15] tracking-[-0.015em]">
-          Run your center calmer, starting tonight.
+        <h2 className="font-bold text-[36px] md:text-[52px] leading-[1.1] tracking-[-0.02em]">
+          Run Your Center Calmer, Starting Tonight.
         </h2>
         <p className="mt-5 text-[16px] md:text-[18px] text-white/85 max-w-[640px] mx-auto leading-[1.5]">
           Set up your location, add your students, and welcome the first check-in — all in a
@@ -577,7 +579,7 @@ function FooterCol({
 }) {
   return (
     <div>
-      <h4 className="text-[13px] uppercase tracking-[0.08em] text-[#202124] font-medium mb-3">
+      <h4 className="text-[13px] uppercase tracking-[0.08em] text-[#202124] font-bold mb-3">
         {title}
       </h4>
       <ul className="space-y-2.5">
@@ -616,7 +618,7 @@ function TodayMockup() {
         <div className="p-7">
           <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
             <div>
-              <h3 className="text-[20px] text-[#202124] font-medium tracking-tight">
+              <h3 className="text-[20px] text-[#202124] font-bold tracking-tight">
                 Today · Tuesday, May 21
               </h3>
               <p className="text-[13px] text-[#5F6368] mt-1">
@@ -945,36 +947,36 @@ function ProductTour() {
     <section className="bg-[#F8F9FA] border-y border-[#DADCE0]">
       <div className="max-w-[1200px] mx-auto px-6 py-24 md:py-28">
         <SectionHead
-          eyebrow="A glimpse inside"
-          title={<>Every screen built for the front desk.</>}
+          eyebrow="A Glimpse Inside"
+          title={<>Every Screen Built for the Front Desk.</>}
           body="Dashboard for the tenant admin. Today screen for the front desk. Schedule, make-ups, and student records in between."
         />
 
         <div className="grid md:grid-cols-2 gap-5 md:gap-6">
           <BrowserTile
             chromePath="tryclasscadence.com / tenant"
-            title="Tenant admin dashboard"
+            title="Tenant Admin Dashboard"
             tone="blue"
           >
             <PageMockDashboard />
           </BrowserTile>
           <BrowserTile
             chromePath="tryclasscadence.com / tenant / schedule"
-            title="Weekly schedule"
+            title="Weekly Schedule"
             tone="green"
           >
             <PageMockSchedule />
           </BrowserTile>
           <BrowserTile
             chromePath="tryclasscadence.com / tenant / makeups"
-            title="Make-up tracking"
+            title="Make-Up Tracking"
             tone="yellow"
           >
             <PageMockMakeups />
           </BrowserTile>
           <BrowserTile
             chromePath="tryclasscadence.com / tenant / students"
-            title="Students directory"
+            title="Students Directory"
             tone="blue"
           >
             <PageMockStudents />
@@ -1016,7 +1018,7 @@ function BrowserTile({
           className="h-2 w-2 rounded-full"
           style={{ backgroundColor: t.icon }}
         />
-        <p className="text-[14px] font-medium text-[#202124]">{title}</p>
+        <p className="text-[14px] font-bold text-[#202124]">{title}</p>
       </div>
     </div>
   );
@@ -1322,19 +1324,19 @@ function ReminderShowcase() {
     <section className="bg-white">
       <div className="max-w-[1200px] mx-auto px-6 py-24 md:py-28">
         <SectionHead
-          eyebrow="Parent reminders"
-          title={<>What parents actually receive.</>}
+          eyebrow="Parent Reminders"
+          title={<>What Parents Actually Receive.</>}
           body="Three email types fire automatically — branded as you, sent from your domain, opted out per student if they ask."
         />
 
         <div className="grid md:grid-cols-3 gap-5">
-          <ReminderTile title="Class reminder" tone="blue">
+          <ReminderTile title="Class Reminder" tone="blue">
             <ReminderEmailReminder />
           </ReminderTile>
-          <ReminderTile title="Absence alert" tone="red">
+          <ReminderTile title="Absence Alert" tone="red">
             <ReminderEmailAbsent />
           </ReminderTile>
-          <ReminderTile title="Make-up offer" tone="yellow">
+          <ReminderTile title="Make-Up Offer" tone="yellow">
             <ReminderEmailMakeup />
           </ReminderTile>
         </div>
@@ -1364,7 +1366,7 @@ function ReminderTile({
           className="h-2 w-2 rounded-full"
           style={{ backgroundColor: t.icon }}
         />
-        <p className="text-[14px] font-medium text-[#202124]">{title}</p>
+        <p className="text-[14px] font-bold text-[#202124]">{title}</p>
       </div>
     </div>
   );

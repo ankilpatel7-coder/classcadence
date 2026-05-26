@@ -1,11 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
+import { Fraunces, Roboto, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
+// Roboto — Google's canonical web font. Stands in for "Google Sans"
+// (which isn't publicly available on Google Fonts). Used app-wide via
+// the --font-ui CSS variable so existing Tailwind config keeps working.
+const roboto = Roboto({
   subsets: ["latin"],
   variable: "--font-ui",
   display: "swap",
+  weight: ["400", "500", "700", "900"],
 });
 
 const fraunces = Fraunces({
@@ -42,7 +46,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${fraunces.variable} ${jetbrainsMono.variable}`}
+      className={`${roboto.variable} ${fraunces.variable} ${jetbrainsMono.variable}`}
     >
       <body className="font-ui antialiased">{children}</body>
     </html>
