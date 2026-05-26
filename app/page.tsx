@@ -88,7 +88,7 @@ function Nav() {
           </Link>
           <Link
             href="/signup"
-            className="inline-flex items-center px-5 py-2 bg-[#1A73E8] hover:bg-[#1666D2] text-white text-[14px] font-medium rounded-[6px] transition-colors"
+            className="inline-flex items-center px-5 py-2 bg-[#1A73E8] hover:bg-[#1666D2] text-white text-[14px] font-medium rounded-[6px] shadow-[0_1px_2px_rgba(60,64,67,0.18)] hover:shadow-[0_4px_12px_rgba(26,115,232,0.40)] transition-all"
           >
             Start free
           </Link>
@@ -122,13 +122,13 @@ function Hero() {
       <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
         <Link
           href="/signup"
-          className="inline-flex items-center px-7 py-3 bg-[#1A73E8] hover:bg-[#1666D2] text-white text-[15px] font-medium rounded-[6px] transition-colors"
+          className="inline-flex items-center px-7 py-3 bg-[#1A73E8] hover:bg-[#1666D2] text-white text-[15px] font-medium rounded-[6px] shadow-[0_1px_2px_rgba(60,64,67,0.18)] hover:shadow-[0_4px_12px_rgba(26,115,232,0.40)] hover:-translate-y-0.5 transition-all"
         >
           Try ClassCadence for free
         </Link>
         <Link
           href="/login"
-          className="inline-flex items-center px-7 py-3 border border-[#DADCE0] hover:border-[#9AA0A6] text-[#1A73E8] text-[15px] font-medium rounded-[6px] transition-colors"
+          className="inline-flex items-center px-7 py-3 border border-[#DADCE0] hover:border-[#9AA0A6] hover:bg-[#F8F9FA] text-[#1A73E8] text-[15px] font-medium rounded-[6px] transition-all"
         >
           Sign in
         </Link>
@@ -136,8 +136,39 @@ function Hero() {
       <p className="mt-5 text-[13px] text-[#80868B]">
         No credit card required · Cancel anytime
       </p>
-      <TodayMockup />
+      <HeroVideo />
     </section>
+  );
+}
+
+/* -----------------------------------------------------------------------------
+   Hero trailer video — autoplays muted on load, loops, plays inline on iOS.
+   Wrapped in a soft frame with a tinted halo so the cut from white page
+   to video doesn't feel abrupt.
+----------------------------------------------------------------------------- */
+function HeroVideo() {
+  return (
+    <div className="mt-16 md:mt-20 mx-auto max-w-[1100px]">
+      <div className="relative">
+        {/* Soft tinted halo behind the frame */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-8 -inset-y-4 rounded-[32px] bg-[#1A73E8]/10 blur-2xl"
+        />
+        <div className="relative rounded-[16px] overflow-hidden bg-[#F8F9FA] border border-[#DADCE0] shadow-[0_24px_60px_-20px_rgba(60,64,67,0.30)] transition-shadow duration-300 hover:shadow-[0_32px_80px_-20px_rgba(60,64,67,0.40)]">
+          <video
+            src="/trailer.mp4"
+            poster="/screenshots/home.png"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            className="block w-full h-auto"
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -300,11 +331,11 @@ function FeatureCard({
   const t = FEATURE_TONES[tone];
   return (
     <div
-      className="rounded-[16px] p-7 transition hover:-translate-y-0.5"
+      className="group rounded-[16px] p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_16px_36px_-16px_rgba(60,64,67,0.25)]"
       style={{ backgroundColor: t.bg }}
     >
       <div
-        className="w-11 h-11 rounded-full flex items-center justify-center mb-5 bg-white"
+        className="w-11 h-11 rounded-full flex items-center justify-center mb-5 bg-white shadow-[0_1px_4px_rgba(60,64,67,0.10)] transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3"
         style={{ color: t.icon }}
       >
         <Icon size={22} />
@@ -432,7 +463,7 @@ function StepCard({
 }) {
   const t = FEATURE_TONES[tone];
   return (
-    <div className="rounded-[16px] border border-[#DADCE0] bg-white overflow-hidden transition hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-12px_rgba(60,64,67,0.18)]">
+    <div className="group rounded-[16px] border border-[#DADCE0] bg-white overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_16px_36px_-16px_rgba(60,64,67,0.25)]">
       <div className="p-7">
         <div
           className="w-9 h-9 rounded-full flex items-center justify-center mb-4 font-medium text-[15px]"
@@ -500,13 +531,13 @@ function CTAStrip() {
         <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
             href="/signup"
-            className="inline-flex items-center px-7 py-3 bg-white hover:bg-[#F1F3F4] text-[#1A73E8] text-[15px] font-medium rounded-[6px] transition-colors"
+            className="inline-flex items-center px-7 py-3 bg-white hover:bg-[#F1F3F4] text-[#1A73E8] text-[15px] font-medium rounded-[6px] shadow-[0_4px_12px_rgba(0,0,0,0.16)] hover:shadow-[0_8px_20px_rgba(0,0,0,0.24)] hover:-translate-y-0.5 transition-all"
           >
             Start free
           </Link>
           <Link
             href="/login"
-            className="inline-flex items-center px-7 py-3 border border-white/40 hover:border-white text-white text-[15px] font-medium rounded-[6px] transition-colors"
+            className="inline-flex items-center px-7 py-3 border border-white/40 hover:border-white hover:bg-white/10 text-white text-[15px] font-medium rounded-[6px] transition-all"
           >
             Sign in
           </Link>
@@ -601,109 +632,6 @@ function FooterCol({
 /* =============================================================================
    MOCKUPS — preserved from the previous version, restyled flat & light
 ============================================================================= */
-
-/* ---- Today screen ---- */
-function TodayMockup() {
-  return (
-    <div className="mt-16 md:mt-20 mx-auto max-w-[960px] text-left">
-      <div className="bg-white rounded-[12px] border border-[#DADCE0] overflow-hidden shadow-[0_12px_32px_-12px_rgba(60,64,67,0.18)]">
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#DADCE0] bg-[#F8F9FA]">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#EA4335]" />
-          <span className="w-2.5 h-2.5 rounded-full bg-[#FBBC04]" />
-          <span className="w-2.5 h-2.5 rounded-full bg-[#34A853]" />
-          <div className="ml-3 px-3 py-0.5 rounded-md bg-white border border-[#DADCE0] text-[11px] text-[#5F6368] font-mono">
-            tryclasscadence.com · Today
-          </div>
-        </div>
-        <div className="p-7">
-          <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-            <div>
-              <h3 className="text-[20px] text-[#202124] font-bold tracking-tight">
-                Today · Tuesday, May 21
-              </h3>
-              <p className="text-[13px] text-[#5F6368] mt-1">
-                4:00 PM session · EL Room · 6 of 8 expected
-              </p>
-            </div>
-            <span className="px-3 py-1 bg-[#E6F4EA] text-[#1E8E3E] rounded-[6px] text-[13px] font-medium">
-              4 checked in
-            </span>
-          </div>
-          <div className="space-y-2">
-            <StudentRow name="Aditya P." time="3:58 PM" status="in" />
-            <StudentRow name="Maya R." time="4:01 PM" status="in" />
-            <StudentRow name="Ethan K." time="4:02 PM" status="in" />
-            <StudentRow name="Sophia L." time="4:08 PM" status="late" />
-            <StudentRow name="Liam C." time="—" status="expected" />
-            <StudentRow name="Olivia W." time="—" status="expected" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StudentRow({
-  name,
-  time,
-  status,
-}: {
-  name: string;
-  time: string;
-  status: "in" | "late" | "expected";
-}) {
-  const config = {
-    in: {
-      label: "Checked in",
-      bg: "#E6F4EA",
-      text: "#1E8E3E",
-      dot: "#1E8E3E",
-      cta: "Check out",
-      ctaStyle: "border border-[#DADCE0] text-[#1A73E8] hover:bg-[#F8F9FA]",
-    },
-    late: {
-      label: "Late · checked in",
-      bg: "#FEF7E0",
-      text: "#B86E00",
-      dot: "#F9AB00",
-      cta: "Check out",
-      ctaStyle: "border border-[#DADCE0] text-[#1A73E8] hover:bg-[#F8F9FA]",
-    },
-    expected: {
-      label: "Expected",
-      bg: "#F8F9FA",
-      text: "#5F6368",
-      dot: "#DADCE0",
-      cta: "Check in",
-      ctaStyle: "bg-[#1A73E8] hover:bg-[#1666D2] text-white",
-    },
-  }[status];
-  return (
-    <div className="flex items-center justify-between px-4 py-2.5 rounded-[8px] border border-[#DADCE0] hover:bg-[#F8F9FA] transition-colors">
-      <div className="flex items-center gap-3">
-        <span
-          className="w-2 h-2 rounded-full"
-          style={{ backgroundColor: config.dot }}
-        />
-        <span className="text-[14px] font-medium text-[#202124]">{name}</span>
-        <span className="text-[12px] text-[#5F6368] font-mono">{time}</span>
-      </div>
-      <div className="flex items-center gap-3">
-        <span
-          className="hidden sm:inline text-[11px] font-medium px-2.5 py-0.5 rounded-[6px]"
-          style={{ backgroundColor: config.bg, color: config.text }}
-        >
-          {config.label}
-        </span>
-        <button
-          className={`text-[12px] font-medium px-3 py-1.5 rounded-[6px] transition-colors ${config.ctaStyle}`}
-        >
-          {config.cta}
-        </button>
-      </div>
-    </div>
-  );
-}
 
 /* ---- Bell / notifications ---- */
 function BellMockup() {
@@ -940,7 +868,7 @@ function StepMockReminder() {
 }
 
 /* =============================================================================
-   Product tour — four browser tiles
+   Product tour — real product screenshots, no synthetic chrome
 ============================================================================= */
 function ProductTour() {
   return (
@@ -949,369 +877,80 @@ function ProductTour() {
         <SectionHead
           eyebrow="A Glimpse Inside"
           title={<>Every Screen Built for the Front Desk.</>}
-          body="Dashboard for the tenant admin. Today screen for the front desk. Schedule, make-ups, and student records in between."
+          body="Dashboard for the tenant admin. Today screen for the front desk. Schedule and student records in between."
         />
 
-        <div className="grid md:grid-cols-2 gap-5 md:gap-6">
-          <BrowserTile
-            chromePath="tryclasscadence.com / tenant"
+        <div className="grid md:grid-cols-2 gap-6 md:gap-8">
+          <ScreenshotCard
+            src="/screenshots/home.png"
+            alt="ClassCadence tenant dashboard showing active students, sessions today, attendance ring, and weekly attendance bars"
             title="Tenant Admin Dashboard"
+            body="KPI tiles, the 7-day attendance ring, weekly attendance bars, and one-click reminders — the overview the operator sees first thing in the morning."
             tone="blue"
-          >
-            <PageMockDashboard />
-          </BrowserTile>
-          <BrowserTile
-            chromePath="tryclasscadence.com / tenant / schedule"
-            title="Weekly Schedule"
+          />
+          <ScreenshotCard
+            src="/screenshots/today.png"
+            alt="ClassCadence Today screen with student check-in rows grouped by class session"
+            title="The Today Screen"
+            body="Every student expected today, grouped by session. One tap to check in, one tap to check out, with a live timer per row."
             tone="green"
-          >
-            <PageMockSchedule />
-          </BrowserTile>
-          <BrowserTile
-            chromePath="tryclasscadence.com / tenant / makeups"
-            title="Make-Up Tracking"
+          />
+          <ScreenshotCard
+            src="/screenshots/schedule.png"
+            alt="ClassCadence weekly schedule grid with sessions blocked across Mon-Sun in the location's timezone"
+            title="Weekly Schedule"
+            body="Two-day weekly cadence rendered as a real grid. Color-coded per classroom. Multi-location ready, with each location keeping its own timezone."
             tone="yellow"
-          >
-            <PageMockMakeups />
-          </BrowserTile>
-          <BrowserTile
-            chromePath="tryclasscadence.com / tenant / students"
-            title="Students Directory"
+          />
+          <ScreenshotCard
+            src="/screenshots/student.png"
+            alt="ClassCadence student record showing parent contact info, enrollment slots, and status"
+            title="Student Record"
+            body="Parent contact info, enrollment slots, status, and notes — all on one tight page. Each student carries their own attendance and make-ups history."
             tone="blue"
-          >
-            <PageMockStudents />
-          </BrowserTile>
+          />
         </div>
       </div>
     </section>
   );
 }
 
-function BrowserTile({
-  chromePath,
+function ScreenshotCard({
+  src,
+  alt,
   title,
+  body,
   tone,
-  children,
 }: {
-  chromePath: string;
+  src: string;
+  alt: string;
   title: string;
+  body: string;
   tone: FeatureTone;
-  children: React.ReactNode;
 }) {
   const t = FEATURE_TONES[tone];
   return (
     <div className="group">
-      <div className="rounded-[12px] border border-[#DADCE0] overflow-hidden bg-white transition group-hover:-translate-y-0.5 shadow-[0_4px_12px_-4px_rgba(60,64,67,0.10)] group-hover:shadow-[0_8px_24px_-8px_rgba(60,64,67,0.18)]">
-        <div className="flex items-center gap-2 px-3.5 py-2 border-b border-[#DADCE0] bg-[#F8F9FA]">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#EA4335]" />
-          <span className="w-2.5 h-2.5 rounded-full bg-[#FBBC04]" />
-          <span className="w-2.5 h-2.5 rounded-full bg-[#34A853]" />
-          <div className="ml-3 px-2.5 py-0.5 rounded-[6px] bg-white border border-[#DADCE0] text-[10px] text-[#5F6368] font-mono">
-            {chromePath}
-          </div>
-        </div>
-        <div className="bg-white p-4 min-h-[260px]">{children}</div>
+      <div className="rounded-[16px] overflow-hidden bg-white border border-[#DADCE0] shadow-[0_8px_24px_-12px_rgba(60,64,67,0.20)] transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_24px_56px_-20px_rgba(60,64,67,0.32)]">
+        <Image
+          src={src}
+          alt={alt}
+          width={1920}
+          height={1080}
+          className="block w-full h-auto"
+        />
       </div>
-      <div className="mt-3 flex items-center gap-2">
+      <div className="mt-4 flex items-center gap-2">
         <span
           aria-hidden
           className="h-2 w-2 rounded-full"
           style={{ backgroundColor: t.icon }}
         />
-        <p className="text-[14px] font-bold text-[#202124]">{title}</p>
+        <p className="text-[15px] font-bold text-[#202124]">{title}</p>
       </div>
-    </div>
-  );
-}
-
-/* ---- Dashboard mock ---- */
-function PageMockDashboard() {
-  return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-4 gap-2">
-        <MockKpi label="Students" value="47" accent="#1A73E8" />
-        <MockKpi label="Today" value="3" accent="#1E8E3E" />
-        <MockKpi label="Make-ups" value="2" accent="#F9AB00" />
-        <MockKpi label="Absent" value="1" accent="#D93025" />
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        <div className="col-span-1 rounded-[8px] border border-[#DADCE0] bg-white p-3">
-          <p className="text-[9px] font-medium uppercase tracking-wider text-[#80868B]">
-            Attendance
-          </p>
-          <div className="mt-1 flex items-center justify-center">
-            <MiniRing pct={92} />
-          </div>
-        </div>
-        <div className="col-span-2 rounded-[8px] border border-[#DADCE0] bg-white p-3">
-          <p className="text-[9px] font-medium uppercase tracking-wider text-[#80868B]">
-            Last 4 weeks
-          </p>
-          <div className="mt-2 flex items-end justify-around gap-2 h-[68px]">
-            {[78, 84, 91, 92].map((v, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                <span className="text-[9px] font-medium tabular-nums text-[#1A73E8]">
-                  {v}%
-                </span>
-                <div
-                  className="w-full rounded-t-[4px] bg-[#1A73E8]"
-                  style={{ height: `${v * 0.5}px` }}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MockKpi({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent: string;
-}) {
-  return (
-    <div className="relative overflow-hidden rounded-[8px] border border-[#DADCE0] bg-white px-2 py-2">
-      <span
-        aria-hidden
-        className="absolute inset-x-0 top-0 h-[3px]"
-        style={{ backgroundColor: accent }}
-      />
-      <p className="text-[9px] font-medium uppercase tracking-wider text-[#80868B]">
-        {label}
+      <p className="mt-1.5 ml-4 text-[14px] text-[#5F6368] leading-[1.55] max-w-[480px]">
+        {body}
       </p>
-      <p className="mt-1 text-[18px] font-medium tabular-nums text-[#202124] leading-none">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function MiniRing({ pct }: { pct: number }) {
-  const size = 60;
-  const stroke = 6;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const offset = c * (1 - pct / 100);
-  return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke="#E8EAED"
-          strokeWidth={stroke}
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke="#1A73E8"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={c}
-          strokeDashoffset={offset}
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <p className="text-[14px] font-medium tabular-nums text-[#202124]">
-          {pct}%
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/* ---- Schedule mock ---- */
-function PageMockSchedule() {
-  const days = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-  const sessions: [number, number, number, string][] = [
-    [0, 10, 22, "#1A73E8"],
-    [0, 50, 22, "#1E8E3E"],
-    [1, 30, 22, "#F9AB00"],
-    [2, 20, 18, "#1A73E8"],
-    [3, 40, 22, "#1E8E3E"],
-    [4, 10, 24, "#F9AB00"],
-    [4, 55, 20, "#1A73E8"],
-  ];
-  return (
-    <div className="rounded-[8px] border border-[#DADCE0] bg-white overflow-hidden">
-      <div className="grid grid-cols-5 border-b border-[#DADCE0] bg-[#F8F9FA]">
-        {days.map((d, i) => (
-          <div
-            key={d}
-            className={`px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wider ${
-              i === 2 ? "text-[#1A73E8]" : "text-[#80868B]"
-            }`}
-          >
-            {d}
-            {i === 2 ? (
-              <span className="block text-[9px] font-normal text-[#1A73E8]">
-                Today
-              </span>
-            ) : null}
-          </div>
-        ))}
-      </div>
-      <div className="relative grid grid-cols-5 h-[180px] divide-x divide-[#E8EAED]">
-        {days.map((_, i) => (
-          <div
-            key={i}
-            className={i === 2 ? "bg-[#E8F0FE]/40" : "bg-white"}
-          >
-            {Array.from({ length: 4 }).map((_, r) => (
-              <div
-                key={r}
-                className="border-t border-[#E8EAED]"
-                style={{ height: "25%" }}
-              />
-            ))}
-          </div>
-        ))}
-        {sessions.map(([d, top, h, color], idx) => (
-          <div
-            key={idx}
-            className="absolute rounded-[6px] bg-white px-1 py-0.5 overflow-hidden"
-            style={{
-              left: `calc(${d * 20}% + 4px)`,
-              width: `calc(20% - 8px)`,
-              top: `${top}%`,
-              height: `${h}%`,
-              borderLeft: `2px solid ${color}`,
-              backgroundColor: `${color}14`,
-            }}
-          >
-            <p className="text-[8px] font-medium tabular-nums text-[#202124]">
-              4:00
-            </p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ---- Make-ups mock ---- */
-function PageMockMakeups() {
-  return (
-    <div className="space-y-3">
-      <MakeupSection
-        label="Needs make-up"
-        accentBorder="#D93025"
-        accentBg="#FCE8E6"
-        items={[
-          { name: "Hao Chen", sub: "Absent · May 21", tag: "1 owed" },
-          { name: "Sofia García", sub: "Absent · May 19", tag: "1 owed" },
-        ]}
-      />
-      <MakeupSection
-        label="Pending"
-        accentBorder="#F9AB00"
-        accentBg="#FEF7E0"
-        items={[{ name: "Olivia W.", sub: "Offered Fri 5:00 PM", tag: "Awaiting" }]}
-      />
-      <MakeupSection
-        label="Completed"
-        accentBorder="#1E8E3E"
-        accentBg="#E6F4EA"
-        items={[{ name: "Liam C.", sub: "Made up May 22", tag: "Done" }]}
-      />
-    </div>
-  );
-}
-
-function MakeupSection({
-  label,
-  accentBorder,
-  accentBg,
-  items,
-}: {
-  label: string;
-  accentBorder: string;
-  accentBg: string;
-  items: { name: string; sub: string; tag: string }[];
-}) {
-  return (
-    <div>
-      <p className="text-[9px] font-medium uppercase tracking-wider text-[#80868B] mb-1.5">
-        {label}
-      </p>
-      <div className="space-y-1.5">
-        {items.map((it, i) => (
-          <div
-            key={i}
-            className="flex items-center gap-2 rounded-[6px] border border-[#DADCE0] bg-white px-2.5 py-1.5"
-            style={{ borderLeft: `3px solid ${accentBorder}` }}
-          >
-            <span
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-medium text-[#202124]"
-              style={{ backgroundColor: accentBg }}
-            >
-              {it.name.split(" ").map((w) => w[0]).join("").slice(0, 2)}
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-medium text-[#202124] truncate">
-                {it.name}
-              </p>
-              <p className="text-[9px] text-[#80868B]">{it.sub}</p>
-            </div>
-            <span className="text-[9px] font-medium uppercase tracking-wider text-[#5F6368]">
-              {it.tag}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ---- Students mock ---- */
-function PageMockStudents() {
-  const rows = [
-    { name: "Ella Johnson", grade: "4th", classes: 2, color: "#1A73E8" },
-    { name: "Hao Chen", grade: "5th", classes: 2, color: "#1E8E3E" },
-    { name: "Veer Patel", grade: "3rd", classes: 1, color: "#F9AB00" },
-    { name: "Sofia García", grade: "6th", classes: 2, color: "#D93025" },
-    { name: "Mateo Ramirez", grade: "4th", classes: 2, color: "#1A73E8" },
-  ];
-  return (
-    <div className="rounded-[8px] border border-[#DADCE0] bg-white overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[#DADCE0] bg-[#F8F9FA]">
-        <span className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] bg-[#E8F0FE] text-[#1A73E8]">
-          <Users size={11} />
-        </span>
-        <p className="text-[11px] font-medium text-[#202124]">47 active students</p>
-        <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#1A73E8] text-[9px] font-medium uppercase tracking-wider text-white">
-          + Add
-        </span>
-      </div>
-      <ul className="divide-y divide-[#E8EAED]">
-        {rows.map((r) => (
-          <li key={r.name} className="flex items-center gap-2.5 px-3 py-2">
-            <span
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-medium text-white"
-              style={{ backgroundColor: r.color }}
-            >
-              {r.name.split(" ").map((w) => w[0]).join("")}
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-medium text-[#202124]">{r.name}</p>
-              <p className="text-[9px] text-[#80868B]">Grade {r.grade}</p>
-            </div>
-            <span className="text-[9px] font-mono tabular-nums text-[#80868B]">
-              {r.classes}/2
-            </span>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
@@ -1357,7 +996,7 @@ function ReminderTile({
   const t = FEATURE_TONES[tone];
   return (
     <div>
-      <div className="rounded-[12px] border border-[#DADCE0] bg-white overflow-hidden transition hover:-translate-y-0.5 shadow-[0_4px_12px_-4px_rgba(60,64,67,0.10)] hover:shadow-[0_8px_24px_-8px_rgba(60,64,67,0.18)]">
+      <div className="rounded-[12px] border border-[#DADCE0] bg-white overflow-hidden transition-all duration-300 hover:-translate-y-1 shadow-[0_4px_12px_-4px_rgba(60,64,67,0.10)] hover:shadow-[0_16px_36px_-12px_rgba(60,64,67,0.25)]">
         {children}
       </div>
       <div className="mt-3 flex items-center gap-2">
