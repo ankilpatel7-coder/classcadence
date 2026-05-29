@@ -18,6 +18,7 @@ import {
 } from "@/app/_components/dashboard/WeeklyBars";
 import { SendRemindersButton } from "@/app/_components/dashboard/SendRemindersButton";
 import { StudentAvatar } from "@/app/_components/StudentAvatar";
+import { localToUtc, todayInTimezone } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Dashboard — ClassCadence" };
@@ -54,48 +55,72 @@ export default async function TenantHomePage({
   const nowIso = now.toISOString();
   const fourWeeksAgo = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const oneDayAhead = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
-  // RLS scopes everything to this tenant via the user-context client.
-  // Fire all dashboard queries in parallel.
+  // Locations first — we need the primary timezone to define "today" the same
+  // way the Today page does, and we short-circuit to onboarding if there are
+  // none. RLS scopes everything to this tenant via the user-context client.
+  const { data: locationsData, error: locationsError } = await supabase
+    .from("locations")
+    .select("id, name, status, city, region, iana_timezone")
+    .order("created_at", { ascending: true });
+
+  const locations = locationsData ?? [];
+
+  // Empty state — no locations yet. Keep the original onboarding card.
+  if (locations.length === 0) {
+    return (
+      <div className="space-y-6">
+        <Header user={user} />
+        <FirstLocationCard />
+      </div>
+    );
+  }
+
+  // Calendar day in the primary location's timezone — matches the Today page
+  // (first active location, ordered by created_at). Falls back to UTC.
+  const primaryTz =
+    locations.find((l) => l.status === "active")?.iana_timezone ??
+    locations[0]?.iana_timezone ??
+    "UTC";
+  const today = todayInTimezone(primaryTz);
+  const dayStartUtc = localToUtc(today, "00:00", primaryTz).toISOString();
+  const dayEndUtc = localToUtc(today, "23:59", primaryTz).toISOString();
+
+  // Remaining dashboard queries fire in parallel.
   const [
-    locationsRes,
     activeStudentsRes,
     attendanceLast4WeeksRes,
     sessionsTodayRes,
     pendingMakeupsRes,
     recentAbsencesRes,
   ] = await Promise.all([
-    supabase
-      .from("locations")
-      .select("id, name, status, city, region")
-      .order("created_at", { ascending: true }),
-
-    // Students with at least one active enrollment.
+    // Students with at least one active enrollment. effective_to is inclusive
+    // (enrollment is active through that date), so use gte against today.
     supabase
       .from("enrollments")
       .select("student_id, effective_to")
-      .or(`effective_to.is.null,effective_to.gt.${nowIso.slice(0, 10)}`),
+      .or(`effective_to.is.null,effective_to.gte.${today}`),
 
     // 4 weeks of attendance — gives both the ring (last 7d) and the bars.
+    // Lift the default 1000-row PostgREST cap so busy tenants aren't truncated.
     supabase
       .from("attendance_records")
       .select("status, sessions!inner(scheduled_start_utc)")
       .gte("sessions.scheduled_start_utc", fourWeeksAgo.toISOString())
-      .lte("sessions.scheduled_start_utc", nowIso),
+      .lte("sessions.scheduled_start_utc", nowIso)
+      .limit(20000),
 
+    // Sessions on today's calendar day in the primary location's timezone.
     supabase
       .from("sessions")
       .select("id")
-      .gte("scheduled_start_utc", nowIso)
-      .lte("scheduled_start_utc", oneDayAhead.toISOString())
+      .gte("scheduled_start_utc", dayStartUtc)
+      .lte("scheduled_start_utc", dayEndUtc)
       .neq("status", "cancelled"),
 
-    supabase
-      .from("makeup_offers")
-      .select("id")
-      .eq("state", "pending")
-      .gt("expires_at", nowIso),
+    // Pending make-ups — match the Makeups page, which counts by state alone
+    // regardless of expiry.
+    supabase.from("makeup_offers").select("id").eq("state", "pending"),
 
     supabase
       .from("attendance_records")
@@ -108,17 +133,15 @@ export default async function TenantHomePage({
       .limit(8),
   ]);
 
-  const locations = locationsRes.data ?? [];
-
-  // Empty state — no locations yet. Keep the original onboarding card.
-  if (locations.length === 0) {
-    return (
-      <div className="space-y-6">
-        <Header user={user} />
-        <FirstLocationCard />
-      </div>
-    );
-  }
+  // Surface query failures instead of silently rendering zeros.
+  const dashboardError =
+    locationsError ??
+    activeStudentsRes.error ??
+    attendanceLast4WeeksRes.error ??
+    sessionsTodayRes.error ??
+    pendingMakeupsRes.error ??
+    recentAbsencesRes.error ??
+    null;
 
   // Active student count
   const activeStudentIds = new Set(
@@ -157,6 +180,12 @@ export default async function TenantHomePage({
   return (
     <div className="space-y-5">
       <Header user={user} />
+
+      {dashboardError ? (
+        <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          Some dashboard metrics failed to load: {dashboardError.message}
+        </div>
+      ) : null}
 
       {/* Flash banners for the reminders button */}
       {searchParams.reminders_sent ? (
