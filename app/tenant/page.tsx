@@ -19,6 +19,7 @@ import {
 import { SendRemindersButton } from "@/app/_components/dashboard/SendRemindersButton";
 import { StudentAvatar } from "@/app/_components/StudentAvatar";
 import { localToUtc, todayInTimezone } from "@/lib/time";
+import { loadSessionsInWindow } from "@/app/tenant/today/load-sessions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Dashboard — ClassCadence" };
@@ -90,7 +91,7 @@ export default async function TenantHomePage({
   const [
     activeStudentsRes,
     attendanceLast4WeeksRes,
-    sessionsTodayRes,
+    todaySessions,
     pendingMakeupsRes,
     recentAbsencesRes,
   ] = await Promise.all([
@@ -110,13 +111,10 @@ export default async function TenantHomePage({
       .lte("sessions.scheduled_start_utc", nowIso)
       .limit(20000),
 
-    // Sessions on today's calendar day in the primary location's timezone.
-    supabase
-      .from("sessions")
-      .select("id")
-      .gte("scheduled_start_utc", dayStartUtc)
-      .lte("scheduled_start_utc", dayEndUtc)
-      .neq("status", "cancelled"),
+    // Sessions on today's calendar day — reuse the Today page's loader so the
+    // tile counts exactly what Today shows (classes with >=1 enrolled student,
+    // empty auto-generated slots excluded).
+    loadSessionsInWindow(dayStartUtc, dayEndUtc),
 
     // Pending make-ups — match the Makeups page, which counts by state alone
     // regardless of expiry.
@@ -138,7 +136,6 @@ export default async function TenantHomePage({
     locationsError ??
     activeStudentsRes.error ??
     attendanceLast4WeeksRes.error ??
-    sessionsTodayRes.error ??
     pendingMakeupsRes.error ??
     recentAbsencesRes.error ??
     null;
@@ -172,7 +169,7 @@ export default async function TenantHomePage({
   // Bucket attendance into the last 4 calendar weeks.
   const weekBars = buildWeekBars(attRows, now, 4);
 
-  const sessionsToday = sessionsTodayRes.data?.length ?? 0;
+  const sessionsToday = todaySessions.length;
   const pendingMakeups = pendingMakeupsRes.data?.length ?? 0;
 
   const absences = (recentAbsencesRes.data ?? []) as unknown as AbsenceRow[];
