@@ -105,7 +105,7 @@ export default async function TenantHomePage({
     // Lift the default 1000-row PostgREST cap so busy tenants aren't truncated.
     supabase
       .from("attendance_records")
-      .select("status, sessions!inner(scheduled_start_utc)")
+      .select("status, sessions!session_id!inner(scheduled_start_utc)")
       .gte("sessions.scheduled_start_utc", fourWeeksAgo.toISOString())
       .lte("sessions.scheduled_start_utc", nowIso)
       .limit(20000),
@@ -125,7 +125,7 @@ export default async function TenantHomePage({
     supabase
       .from("attendance_records")
       .select(
-        "id, student_id, sessions!inner(scheduled_start_utc, time_slots!inner(classrooms!inner(name, locations!inner(iana_timezone)))), students(first_name, last_name)"
+        "id, student_id, sessions!session_id!inner(scheduled_start_utc, time_slots!inner(classrooms!inner(name, locations!inner(iana_timezone)))), students(first_name, last_name)"
       )
       .eq("status", "absent")
       .gte("sessions.scheduled_start_utc", sevenDaysAgo.toISOString())

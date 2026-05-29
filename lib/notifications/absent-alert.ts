@@ -11,7 +11,7 @@ export async function fireAbsentNotification(args: {
   const { data: attendance } = await service
     .from("attendance_records")
     .select(
-      "student_id, sessions!inner(scheduled_start_utc, scheduled_end_utc, time_slots!inner(classrooms!inner(name, locations!inner(iana_timezone))))"
+      "student_id, sessions!session_id!inner(scheduled_start_utc, scheduled_end_utc, time_slots!inner(classrooms!inner(name, locations!inner(iana_timezone))))"
     )
     .eq("id", args.attendanceId)
     .maybeSingle();
