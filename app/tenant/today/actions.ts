@@ -3,10 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { and, eq, inArray, lte, sql } from "drizzle-orm";
+import { db } from "@/lib/db";
 import {
-  createSupabaseServerClient,
-  createSupabaseServiceClient,
-} from "@/lib/supabase/server";
+  timeSlots,
+  classrooms,
+  locations,
+  sessions,
+  attendanceRecords,
+  enrollments,
+  lessonNotes,
+} from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import {
   datesForWeekdayInRange,
@@ -23,25 +30,6 @@ function canWriteAttendance(role: string | null | undefined) {
 }
 
 // ============ Session materialization (manual; Inngest version later) ============
-
-type TimeSlotRow = {
-  id: string;
-  weekday: "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
-  start_time: string; // "HH:MM:SS"
-  end_time: string;
-  status: string;
-  classrooms: {
-    status: string;
-    locations: { id: string; iana_timezone: string; status: string };
-  };
-};
-
-type EnrollmentForSlot = {
-  id: string;
-  student_id: string;
-  effective_from: string;
-  effective_to: string | null;
-};
 
 export async function materializeSessionsAction(_formData: FormData) {
   const user = await getCurrentUserOrRedirect();
@@ -66,95 +54,142 @@ export async function materializeSessions(
 ) {
   // Materialization is a system operation: it creates `sessions` and
   // `attendance_records` rows derived from enrollments. The sessions table
-  // intentionally has no user-write RLS policy, so this runs with the
-  // service-role client (same as the Inngest cron path).
+  // intentionally has no user-write RLS policy, so this runs with the owner
+  // db connection (same as the Inngest cron path).
   // Pass slotIds to limit the work to specific slots (enroll / slot save);
   // omit to materialize everything (manual Force refresh, daily cron).
-  const supabase = createSupabaseServiceClient();
   const now = new Date();
   const until = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
 
-  let query = supabase
-    .from("time_slots")
-    .select(
-      "id, weekday, start_time, end_time, status, classrooms!inner(status, locations!inner(id, iana_timezone, status))"
-    )
-    .eq("status", "active");
-  if (slotIds && slotIds.length > 0) {
-    query = query.in("id", slotIds);
+  let slots: {
+    id: string;
+    weekday: "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+    startTime: string;
+    endTime: string;
+    ianaTimezone: string;
+  }[];
+  try {
+    slots = await db
+      .select({
+        id: timeSlots.id,
+        weekday: timeSlots.weekday,
+        startTime: timeSlots.startTime,
+        endTime: timeSlots.endTime,
+        ianaTimezone: locations.ianaTimezone,
+      })
+      .from(timeSlots)
+      .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+      .innerJoin(locations, eq(locations.id, classrooms.locationId))
+      .where(
+        and(
+          eq(timeSlots.status, "active"),
+          eq(classrooms.status, "active"),
+          eq(locations.status, "active"),
+          slotIds && slotIds.length > 0
+            ? inArray(timeSlots.id, slotIds)
+            : undefined
+        )
+      );
+  } catch (err) {
+    return {
+      sessionsInserted: 0,
+      attendanceInserted: 0,
+      error: err instanceof Error ? err.message : "Failed to load time slots.",
+    };
   }
-  const { data: slots, error: slotsError } = await query;
-  if (slotsError) return { sessionsInserted: 0, attendanceInserted: 0, error: slotsError.message };
-
-  const activeSlots = ((slots ?? []) as unknown as TimeSlotRow[]).filter(
-    (s) => s.classrooms?.status === "active" && s.classrooms?.locations?.status === "active"
-  );
 
   let sessionsInserted = 0;
   let attendanceInserted = 0;
 
-  for (const slot of activeSlots) {
-    const tz = slot.classrooms.locations.iana_timezone;
+  for (const slot of slots) {
+    const tz = slot.ianaTimezone;
     const dates = datesForWeekdayInRange(slot.weekday, now, until, tz);
     if (dates.length === 0) continue;
 
-    const startHHMM = slot.start_time.slice(0, 5);
-    const endHHMM = slot.end_time.slice(0, 5);
+    const startHHMM = slot.startTime.slice(0, 5);
+    const endHHMM = slot.endTime.slice(0, 5);
 
     const sessionRows = dates.map((d) => ({
-      time_slot_id: slot.id,
-      scheduled_start_utc: localToUtc(d, startHHMM, tz).toISOString(),
-      scheduled_end_utc: localToUtc(d, endHHMM, tz).toISOString(),
+      timeSlotId: slot.id,
+      scheduledStartUtc: localToUtc(d, startHHMM, tz),
+      scheduledEndUtc: localToUtc(d, endHHMM, tz),
     }));
 
     // upsert by (time_slot_id, scheduled_start_utc) which has a UNIQUE index.
-    const { data: upserted, error: upsertErr } = await supabase
-      .from("sessions")
-      .upsert(sessionRows, {
-        onConflict: "time_slot_id,scheduled_start_utc",
-        ignoreDuplicates: false,
-      })
-      .select("id, scheduled_start_utc");
-
-    if (upsertErr) {
-      return { sessionsInserted, attendanceInserted, error: upsertErr.message };
+    // DO UPDATE (no-op refresh of end time) so existing rows are still
+    // returned — the attendance build below relies on every session row.
+    let upserted: { id: string; scheduledStartUtc: Date }[];
+    try {
+      upserted = await db
+        .insert(sessions)
+        .values(sessionRows)
+        .onConflictDoUpdate({
+          target: [sessions.timeSlotId, sessions.scheduledStartUtc],
+          set: { scheduledEndUtc: sql`excluded.scheduled_end_utc` },
+        })
+        .returning({
+          id: sessions.id,
+          scheduledStartUtc: sessions.scheduledStartUtc,
+        });
+    } catch (err) {
+      return {
+        sessionsInserted,
+        attendanceInserted,
+        error: err instanceof Error ? err.message : "Failed to upsert sessions.",
+      };
     }
-    sessionsInserted += upserted?.length ?? 0;
+    sessionsInserted += upserted.length;
 
     // Pull enrollments that are active during ANY of these session dates.
-    const earliestDate = dates[0];
     const latestDate = dates[dates.length - 1];
-    const { data: enrollmentsData } = await supabase
-      .from("enrollments")
-      .select("id, student_id, effective_from, effective_to")
-      .eq("time_slot_id", slot.id)
-      .lte("effective_from", latestDate);
+    const enrollmentsData = await db
+      .select({
+        id: enrollments.id,
+        studentId: enrollments.studentId,
+        effectiveFrom: enrollments.effectiveFrom,
+        effectiveTo: enrollments.effectiveTo,
+      })
+      .from(enrollments)
+      .where(
+        and(
+          eq(enrollments.timeSlotId, slot.id),
+          lte(enrollments.effectiveFrom, latestDate)
+        )
+      );
 
-    const enrollments = (enrollmentsData ?? []) as EnrollmentForSlot[];
-
-    const attendanceRows: { session_id: string; student_id: string }[] = [];
-    for (const session of upserted ?? []) {
-      const sessionDate = (session.scheduled_start_utc as string).slice(0, 10);
-      for (const en of enrollments) {
-        if (en.effective_from > sessionDate) continue;
+    const attendanceRows: { sessionId: string; studentId: string }[] = [];
+    for (const session of upserted) {
+      const sessionDate = session.scheduledStartUtc.toISOString().slice(0, 10);
+      for (const en of enrollmentsData) {
+        if (en.effectiveFrom > sessionDate) continue;
         // "ended" means effective_to is on or before sessionDate.
-        if (en.effective_to && en.effective_to <= sessionDate) continue;
-        attendanceRows.push({ session_id: session.id, student_id: en.student_id });
+        if (en.effectiveTo && en.effectiveTo <= sessionDate) continue;
+        attendanceRows.push({
+          sessionId: session.id,
+          studentId: en.studentId,
+        });
       }
     }
 
     if (attendanceRows.length > 0) {
-      const { data: attUpsert, error: attErr } = await supabase
-        .from("attendance_records")
-        .upsert(attendanceRows, {
-          onConflict: "session_id,student_id",
-          ignoreDuplicates: true,
-        })
-        .select("id");
-      if (attErr) {
-        return { sessionsInserted, attendanceInserted, error: attErr.message };
+      let attUpsert: { id: string }[];
+      try {
+        attUpsert = await db
+          .insert(attendanceRecords)
+          .values(attendanceRows)
+          .onConflictDoNothing({
+            target: [attendanceRecords.sessionId, attendanceRecords.studentId],
+          })
+          .returning({ id: attendanceRecords.id });
+      } catch (err) {
+        return {
+          sessionsInserted,
+          attendanceInserted,
+          error:
+            err instanceof Error ? err.message : "Failed to upsert attendance.",
+        };
       }
-      attendanceInserted += attUpsert?.length ?? 0;
+      attendanceInserted += attUpsert.length;
     }
   }
 
@@ -197,14 +232,19 @@ export async function saveLessonNoteAction(
     return { error: parsed.error.issues[0]?.message ?? "Invalid input.", success: false };
   }
 
-  const supabase = createSupabaseServerClient();
-  const { error } = await supabase.from("lesson_notes").insert({
-    attendance_record_id: parsed.data.attendance_id,
-    body: parsed.data.body,
-    visibility: parsed.data.visibility,
-    author_id: user.id,
-  });
-  if (error) return { error: error.message, success: false };
+  try {
+    await db.insert(lessonNotes).values({
+      attendanceRecordId: parsed.data.attendance_id,
+      body: parsed.data.body,
+      visibility: parsed.data.visibility,
+      authorId: user.id,
+    });
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Failed to save note.",
+      success: false,
+    };
+  }
 
   revalidatePath("/tenant/today");
   return { error: null, success: true };
@@ -221,16 +261,26 @@ export async function checkInAllExpectedAction(formData: FormData) {
     redirect("/tenant/today?error=invalid-session");
   }
 
-  const supabase = createSupabaseServerClient();
-  const nowIso = new Date().toISOString();
+  const sessionIdStr = sessionId as string;
+  const now = new Date();
 
-  const { error } = await supabase
-    .from("attendance_records")
-    .update({ status: "present", check_in_at: nowIso })
-    .eq("session_id", sessionId)
-    .eq("status", "expected");
-
-  if (error) redirect(`/tenant/today?error=${encodeURIComponent(error.message)}`);
+  try {
+    await db
+      .update(attendanceRecords)
+      .set({ status: "present", checkInAt: now })
+      .where(
+        and(
+          eq(attendanceRecords.sessionId, sessionIdStr),
+          eq(attendanceRecords.status, "expected")
+        )
+      );
+  } catch (err) {
+    redirect(
+      `/tenant/today?error=${encodeURIComponent(
+        err instanceof Error ? err.message : "update-failed"
+      )}`
+    );
+  }
 
   revalidatePath("/tenant/today");
 }

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { and, asc, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { locations as locationsTable } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { CreateStudentForm } from "./CreateStudentForm";
 
@@ -9,14 +11,19 @@ export const metadata = { title: "Add student — ClassCadence" };
 export const dynamic = "force-dynamic";
 
 export default async function NewStudentPage() {
-  await getCurrentUserOrRedirect();
-  const supabase = createSupabaseServerClient();
+  const user = await getCurrentUserOrRedirect();
 
-  const { data: locations } = await supabase
-    .from("locations")
-    .select("id, name")
-    .eq("status", "active")
-    .order("name");
+  // App-level tenant isolation: only this tenant's active locations.
+  const locations = await db
+    .select({ id: locationsTable.id, name: locationsTable.name })
+    .from(locationsTable)
+    .where(
+      and(
+        eq(locationsTable.tenantId, user.tenantId!),
+        eq(locationsTable.status, "active")
+      )
+    )
+    .orderBy(asc(locationsTable.name));
 
   if (!locations || locations.length === 0) {
     redirect(

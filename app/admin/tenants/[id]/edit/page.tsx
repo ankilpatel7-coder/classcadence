@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import {
-  createSupabaseServerClient,
-  createSupabaseServiceClient,
-} from "@/lib/supabase/server";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { tenants, userProfiles } from "@/lib/db/schema";
 import { EditTenantForm } from "./EditTenantForm";
 import { AdminRow } from "./AdminRow";
 import { InviteAdminForm } from "./InviteAdminForm";
@@ -29,26 +28,44 @@ export default async function EditTenantPage({
   params: { id: string };
   searchParams: { removed?: string; error?: string; invite_error?: string };
 }) {
-  const supabase = createSupabaseServerClient();
-  const { data: tenant, error } = await supabase
-    .from("tenants")
-    .select("id, name, legal_name, default_iana_tz, country, status")
-    .eq("id", params.id)
-    .maybeSingle();
+  const [tenantRow] = await db
+    .select({
+      id: tenants.id,
+      name: tenants.name,
+      legal_name: tenants.legalName,
+      default_iana_tz: tenants.defaultIanaTz,
+      country: tenants.country,
+      status: tenants.status,
+    })
+    .from(tenants)
+    .where(eq(tenants.id, params.id))
+    .limit(1);
 
-  if (error || !tenant) notFound();
+  if (!tenantRow) notFound();
+  const tenant = tenantRow;
 
-  // Service-role read: avoids fighting RLS for cross-tenant profile listings
-  // (super_admin can read all, but using the service client keeps intent clear).
-  const service = createSupabaseServiceClient();
-  const { data: adminsData } = await service
-    .from("user_profiles")
-    .select("id, email, full_name, created_at")
-    .eq("tenant_id", tenant.id)
-    .in("role", ["tenant_admin", "location_admin"])
-    .order("created_at", { ascending: true });
+  // Owner connection: avoids fighting RLS for cross-tenant profile listings
+  // (super_admin can read all, but using the owner client keeps intent clear).
+  const adminsData = await db
+    .select({
+      id: userProfiles.id,
+      email: userProfiles.email,
+      full_name: userProfiles.fullName,
+      created_at: userProfiles.createdAt,
+    })
+    .from(userProfiles)
+    .where(
+      and(
+        eq(userProfiles.tenantId, tenant.id),
+        inArray(userProfiles.role, ["tenant_admin", "location_admin"])
+      )
+    )
+    .orderBy(asc(userProfiles.createdAt));
 
-  const admins = (adminsData ?? []) as AdminRecord[];
+  const admins: AdminRecord[] = adminsData.map((a) => ({
+    ...a,
+    created_at: a.created_at.toISOString(),
+  }));
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">

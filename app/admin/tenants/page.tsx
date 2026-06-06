@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Pencil, Plus } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { desc } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { tenants as tenantsTable } from "@/lib/db/schema";
 import { DeleteTenantButton } from "./DeleteTenantButton";
 
 export const dynamic = "force-dynamic";
@@ -20,13 +22,25 @@ export default async function TenantsPage({
 }: {
   searchParams: { deleted?: string; error?: string };
 }) {
-  const supabase = createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("tenants")
-    .select("id, name, legal_name, default_iana_tz, country, status, created_at")
-    .order("created_at", { ascending: false });
-
-  const tenants = (data ?? []) as TenantRow[];
+  let tenants: TenantRow[] = [];
+  let error: { message: string } | null = null;
+  try {
+    const rows = await db
+      .select({
+        id: tenantsTable.id,
+        name: tenantsTable.name,
+        legal_name: tenantsTable.legalName,
+        default_iana_tz: tenantsTable.defaultIanaTz,
+        country: tenantsTable.country,
+        status: tenantsTable.status,
+        created_at: tenantsTable.createdAt,
+      })
+      .from(tenantsTable)
+      .orderBy(desc(tenantsTable.createdAt));
+    tenants = rows.map((r) => ({ ...r, created_at: r.created_at.toISOString() }));
+  } catch (err) {
+    error = { message: err instanceof Error ? err.message : "Unknown error" };
+  }
 
   return (
     <div className="space-y-6">

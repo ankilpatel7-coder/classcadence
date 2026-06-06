@@ -1,4 +1,14 @@
-import { createSupabaseServiceClient } from "@/lib/supabase/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  attendanceRecords,
+  sessions,
+  timeSlots,
+  classrooms,
+  locations,
+  students,
+  tenants,
+} from "@/lib/db/schema";
 import { formatTimeInTimezone } from "@/lib/time";
 import { createNotification, tenantAdminUserIds } from "@/lib/notifications/create";
 
@@ -6,85 +16,73 @@ export async function fireAbsentNotification(args: {
   tenantId: string;
   attendanceId: string;
 }) {
-  const service = createSupabaseServiceClient();
-
-  const { data: attendance } = await service
-    .from("attendance_records")
-    .select(
-      "student_id, sessions!session_id!inner(scheduled_start_utc, scheduled_end_utc, time_slots!inner(classrooms!inner(name, locations!inner(iana_timezone))))"
-    )
-    .eq("id", args.attendanceId)
-    .maybeSingle();
-
-  type Row = {
-    student_id: string;
-    sessions: {
-      scheduled_start_utc: string;
-      scheduled_end_utc: string;
-      time_slots: {
-        classrooms: {
-          name: string;
-          locations: { iana_timezone: string };
-        };
-      };
-    };
-  };
-  const att = attendance as unknown as Row | null;
+  // attendance_record -> session (via session_id) -> time_slot -> classroom
+  // -> location. See [[attendance-sessions-embed]]: join on session_id, not
+  // made_up_in_session_id.
+  const [att] = await db
+    .select({
+      studentId: attendanceRecords.studentId,
+      scheduledStartUtc: sessions.scheduledStartUtc,
+      classroomName: classrooms.name,
+      tz: locations.ianaTimezone,
+    })
+    .from(attendanceRecords)
+    .innerJoin(sessions, eq(sessions.id, attendanceRecords.sessionId))
+    .innerJoin(timeSlots, eq(timeSlots.id, sessions.timeSlotId))
+    .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+    .innerJoin(locations, eq(locations.id, classrooms.locationId))
+    .where(eq(attendanceRecords.id, args.attendanceId))
+    .limit(1);
   if (!att) return;
 
   const [studentRes, tenantRes, adminIds] = await Promise.all([
-    service
-      .from("students")
-      .select(
-        "first_name, last_name, primary_parent_name, primary_email, notification_prefs_json"
-      )
-      .eq("id", att.student_id)
-      .maybeSingle(),
-    service
-      .from("tenants")
-      .select("name")
-      .eq("id", args.tenantId)
-      .maybeSingle(),
+    db
+      .select({
+        firstName: students.firstName,
+        lastName: students.lastName,
+        primaryParentName: students.primaryParentName,
+        primaryEmail: students.primaryEmail,
+        notificationPrefsJson: students.notificationPrefsJson,
+      })
+      .from(students)
+      .where(eq(students.id, att.studentId))
+      .limit(1),
+    db
+      .select({ name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, args.tenantId))
+      .limit(1),
     tenantAdminUserIds(args.tenantId),
   ]);
 
-  const student = studentRes.data as
-    | {
-        first_name: string;
-        last_name: string;
-        primary_parent_name: string | null;
-        primary_email: string | null;
-        notification_prefs_json: { email?: boolean } | null;
-      }
-    | null;
+  const student = studentRes[0];
   if (!student) return;
+  const prefs = student.notificationPrefsJson as { email?: boolean } | null;
 
-  const tz = att.sessions.time_slots.classrooms.locations.iana_timezone;
-  const classroomName = att.sessions.time_slots.classrooms.name;
-  const studentName = `${student.first_name} ${student.last_name}`.trim();
-  const tenantName = (tenantRes.data as { name: string } | null)?.name ?? "ClassCadence";
+  const tz = att.tz;
+  const classroomName = att.classroomName;
+  const studentName = `${student.firstName} ${student.lastName}`.trim();
+  const tenantName = tenantRes[0]?.name ?? "ClassCadence";
 
-  const startLocal = formatTimeInTimezone(att.sessions.scheduled_start_utc, tz);
-  const sessionDate = new Date(att.sessions.scheduled_start_utc).toLocaleDateString(
-    "en-US",
-    {
-      timeZone: tz,
-      weekday: "long",
-      month: "short",
-      day: "numeric",
-    }
-  );
+  const startIso = att.scheduledStartUtc.toISOString();
+  const startLocal = formatTimeInTimezone(startIso, tz);
+  const sessionDate = new Date(startIso).toLocaleDateString("en-US", {
+    timeZone: tz,
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
 
   const payload = {
-    student_id: att.student_id,
+    student_id: att.studentId,
     student_name: studentName,
     classroom_name: classroomName,
     date: sessionDate,
     time: startLocal,
   };
 
-  const wantsEmail = student.notification_prefs_json?.email !== false;
-  const sendToParent = wantsEmail && student.primary_email;
+  const wantsEmail = prefs?.email !== false;
+  const sendToParent = wantsEmail && student.primaryEmail;
 
   await createNotification({
     tenantId: args.tenantId,
@@ -95,13 +93,13 @@ export async function fireAbsentNotification(args: {
       ? {
           to: [
             {
-              email: student.primary_email!,
-              name: student.primary_parent_name ?? undefined,
+              email: student.primaryEmail!,
+              name: student.primaryParentName ?? undefined,
             },
           ],
           subject: `${studentName} missed ${classroomName} today`,
           text: buildAbsentEmailText({
-            parentName: student.primary_parent_name,
+            parentName: student.primaryParentName,
             studentName,
             classroomName,
             sessionDate,
@@ -109,7 +107,7 @@ export async function fireAbsentNotification(args: {
             tenantName,
           }),
           html: buildAbsentEmailHtml({
-            parentName: student.primary_parent_name,
+            parentName: student.primaryParentName,
             studentName,
             classroomName,
             sessionDate,

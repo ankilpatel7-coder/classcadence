@@ -1,7 +1,17 @@
 import Link from "next/link";
 import { createHash } from "crypto";
 import { CheckCircle2, Sparkles, XCircle } from "lucide-react";
-import { createSupabaseServiceClient } from "@/lib/supabase/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  makeupOffers,
+  sessions,
+  timeSlots,
+  classrooms,
+  locations,
+  attendanceRecords,
+  students,
+} from "@/lib/db/schema";
 import { formatTimeInTimezone } from "@/lib/time";
 import { Logo } from "@/app/_components/Logo";
 import { respondToMakeupAction } from "@/app/tenant/today/makeup-actions";
@@ -27,56 +37,57 @@ type OfferDetails = {
 
 async function lookupOffer(token: string): Promise<OfferDetails | null> {
   const hash = createHash("sha256").update(token).digest("hex");
-  const service = createSupabaseServiceClient();
 
-  const { data } = await service
-    .from("makeup_offers")
-    .select(
-      `id, state, expires_at,
-       offered_session:sessions!makeup_offers_offered_session_id_fkey(
-         scheduled_start_utc, scheduled_end_utc,
-         time_slots!inner(
-           classrooms!inner(
-             name,
-             locations!inner(name, iana_timezone)
-           )
-         )
-       ),
-       absent_attendance:attendance_records!makeup_offers_absent_attendance_id_fkey(
-         student:students!inner(first_name, last_name)
-       )`
+  // Public page (parent clicks an emailed token link) — scope by token_hash
+  // only, no tenant filter. offered_session joins via offered_session_id ->
+  // time_slot -> classroom -> location; the student comes from the absent
+  // attendance record (absent_attendance_id -> attendance_records -> students).
+  const [data] = await db
+    .select({
+      id: makeupOffers.id,
+      state: makeupOffers.state,
+      expiresAt: makeupOffers.expiresAt,
+      scheduledStartUtc: sessions.scheduledStartUtc,
+      scheduledEndUtc: sessions.scheduledEndUtc,
+      classroomName: classrooms.name,
+      locationName: locations.name,
+      ianaTimezone: locations.ianaTimezone,
+      studentFirstName: students.firstName,
+      studentLastName: students.lastName,
+    })
+    .from(makeupOffers)
+    .innerJoin(sessions, eq(sessions.id, makeupOffers.offeredSessionId))
+    .innerJoin(timeSlots, eq(timeSlots.id, sessions.timeSlotId))
+    .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+    .innerJoin(locations, eq(locations.id, classrooms.locationId))
+    .innerJoin(
+      attendanceRecords,
+      eq(attendanceRecords.id, makeupOffers.absentAttendanceId)
     )
-    .eq("token_hash", hash)
-    .maybeSingle();
+    .innerJoin(students, eq(students.id, attendanceRecords.studentId))
+    .where(eq(makeupOffers.tokenHash, hash))
+    .limit(1);
 
   if (!data) return null;
-  type Raw = {
-    id: string;
-    state: OfferDetails["state"];
-    expires_at: string;
-    offered_session: {
-      scheduled_start_utc: string;
-      scheduled_end_utc: string;
-      time_slots: {
-        classrooms: { name: string; locations: { name: string; iana_timezone: string } };
-      };
-    };
-    absent_attendance: { student: { first_name: string; last_name: string } };
-  };
-  const raw = data as unknown as Raw;
   return {
-    id: raw.id,
-    state: raw.state,
-    expires_at: raw.expires_at,
+    id: data.id,
+    state: data.state,
+    expires_at: data.expiresAt.toISOString(),
     offered_session: {
-      scheduled_start_utc: raw.offered_session.scheduled_start_utc,
-      scheduled_end_utc: raw.offered_session.scheduled_end_utc,
+      scheduled_start_utc: data.scheduledStartUtc.toISOString(),
+      scheduled_end_utc: data.scheduledEndUtc.toISOString(),
       classroom: {
-        name: raw.offered_session.time_slots.classrooms.name,
-        location: raw.offered_session.time_slots.classrooms.locations,
+        name: data.classroomName,
+        location: {
+          name: data.locationName,
+          iana_timezone: data.ianaTimezone,
+        },
       },
     },
-    student: raw.absent_attendance.student,
+    student: {
+      first_name: data.studentFirstName,
+      last_name: data.studentLastName,
+    },
   };
 }
 

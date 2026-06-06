@@ -1,4 +1,14 @@
-import { createSupabaseServiceClient } from "@/lib/supabase/server";
+import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  sessions,
+  timeSlots,
+  classrooms,
+  locations,
+  tenants,
+  attendanceRecords,
+  students,
+} from "@/lib/db/schema";
 import { sendEmail } from "@/lib/email/client";
 import { formatTimeInTimezone } from "@/lib/time";
 
@@ -25,120 +35,111 @@ export async function sendDayOfReminders(
   args: SendRemindersArgs = {}
 ): Promise<SendRemindersResult> {
   const windowHours = args.windowHours ?? 18;
-  const supabase = createSupabaseServiceClient();
   const now = new Date();
   const until = new Date(now.getTime() + windowHours * 60 * 60 * 1000);
 
-  let sessionsQuery = supabase
-    .from("sessions")
-    .select(
-      "id, scheduled_start_utc, scheduled_end_utc, time_slots!inner(classrooms!inner(name, locations!inner(iana_timezone, tenant_id, tenants!inner(name))))"
-    )
-    .gte("scheduled_start_utc", now.toISOString())
-    .lte("scheduled_start_utc", until.toISOString())
-    .neq("status", "cancelled");
+  // sessions -> time_slots -> classrooms -> locations -> tenants. Tenant scope
+  // is pushed into the WHERE when a tenantId is given.
+  const baseWhere = and(
+    gte(sessions.scheduledStartUtc, now),
+    lte(sessions.scheduledStartUtc, until),
+    ne(sessions.status, "cancelled"),
+    args.tenantId ? eq(locations.tenantId, args.tenantId) : undefined
+  );
 
-  const { data: sessions } = await sessionsQuery;
+  const ses = await db
+    .select({
+      id: sessions.id,
+      scheduledStartUtc: sessions.scheduledStartUtc,
+      scheduledEndUtc: sessions.scheduledEndUtc,
+      classroomName: classrooms.name,
+      tz: locations.ianaTimezone,
+      tenantName: tenants.name,
+    })
+    .from(sessions)
+    .innerJoin(timeSlots, eq(timeSlots.id, sessions.timeSlotId))
+    .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+    .innerJoin(locations, eq(locations.id, classrooms.locationId))
+    .innerJoin(tenants, eq(tenants.id, locations.tenantId))
+    .where(baseWhere);
 
-  type SessionRow = {
-    id: string;
-    scheduled_start_utc: string;
-    scheduled_end_utc: string;
-    time_slots: {
-      classrooms: {
-        name: string;
-        locations: {
-          iana_timezone: string;
-          tenant_id: string;
-          tenants: { name: string };
-        };
-      };
-    };
-  };
-  let ses = (sessions ?? []) as unknown as SessionRow[];
-
-  // Tenant scoping is enforced in JS because the foreign-key chain
-  // (sessions -> time_slots -> classrooms -> locations -> tenant_id)
-  // is deep enough that filtering it via PostgREST embed gets brittle.
-  if (args.tenantId) {
-    ses = ses.filter(
-      (s) => s.time_slots.classrooms.locations.tenant_id === args.tenantId
-    );
-  }
   if (ses.length === 0) {
     return { considered: 0, sent: 0, skipped: 0 };
   }
 
+  type SessionRow = (typeof ses)[number];
   const sessionById = new Map<string, SessionRow>();
   for (const s of ses) sessionById.set(s.id, s);
 
   const sessionIds = ses.map((s) => s.id);
-  const { data: attendance } = await supabase
-    .from("attendance_records")
-    .select("session_id, student_id")
-    .in("session_id", sessionIds)
-    .eq("status", "expected");
+  const att = await db
+    .select({
+      sessionId: attendanceRecords.sessionId,
+      studentId: attendanceRecords.studentId,
+    })
+    .from(attendanceRecords)
+    .where(
+      and(
+        inArray(attendanceRecords.sessionId, sessionIds),
+        eq(attendanceRecords.status, "expected")
+      )
+    );
 
-  type AttRow = { session_id: string; student_id: string };
-  const att = (attendance ?? []) as unknown as AttRow[];
   if (att.length === 0) {
     return { considered: 0, sent: 0, skipped: 0 };
   }
 
-  const studentIds = Array.from(new Set(att.map((a) => a.student_id)));
-  const { data: students } = await supabase
-    .from("students")
-    .select(
-      "id, first_name, last_name, primary_parent_name, primary_email, notification_prefs_json"
-    )
-    .in("id", studentIds);
+  const studentIds = Array.from(new Set(att.map((a) => a.studentId)));
+  const studentRows = await db
+    .select({
+      id: students.id,
+      firstName: students.firstName,
+      lastName: students.lastName,
+      primaryParentName: students.primaryParentName,
+      primaryEmail: students.primaryEmail,
+      notificationPrefsJson: students.notificationPrefsJson,
+    })
+    .from(students)
+    .where(inArray(students.id, studentIds));
 
-  type StudentRow = {
-    id: string;
-    first_name: string;
-    last_name: string;
-    primary_parent_name: string | null;
-    primary_email: string | null;
-    notification_prefs_json: { email?: boolean } | null;
-  };
+  type StudentRow = (typeof studentRows)[number];
   const studentById = new Map<string, StudentRow>();
-  for (const s of (students ?? []) as unknown as StudentRow[]) {
-    studentById.set(s.id, s);
-  }
+  for (const s of studentRows) studentById.set(s.id, s);
 
   let sent = 0;
   let skipped = 0;
 
   for (const row of att) {
-    const session = sessionById.get(row.session_id);
-    const student = studentById.get(row.student_id);
+    const session = sessionById.get(row.sessionId);
+    const student = studentById.get(row.studentId);
     if (!session || !student) {
       skipped++;
       continue;
     }
-    const wantsEmail = student.notification_prefs_json?.email !== false;
-    if (!wantsEmail || !student.primary_email) {
+    const prefs = student.notificationPrefsJson as { email?: boolean } | null;
+    const wantsEmail = prefs?.email !== false;
+    if (!wantsEmail || !student.primaryEmail) {
       skipped++;
       continue;
     }
 
-    const tz = session.time_slots.classrooms.locations.iana_timezone;
-    const classroomName = session.time_slots.classrooms.name;
-    const tenantName = session.time_slots.classrooms.locations.tenants.name;
-    const studentName = `${student.first_name} ${student.last_name}`.trim();
-    const startLocal = formatTimeInTimezone(session.scheduled_start_utc, tz);
-    const endLocal = formatTimeInTimezone(session.scheduled_end_utc, tz);
-    const sessionDate = new Date(
-      session.scheduled_start_utc
-    ).toLocaleDateString("en-US", {
+    const tz = session.tz;
+    const classroomName = session.classroomName;
+    const tenantName = session.tenantName;
+    const studentName = `${student.firstName} ${student.lastName}`.trim();
+    const startIso = session.scheduledStartUtc.toISOString();
+    const endIso = session.scheduledEndUtc.toISOString();
+    const startLocal = formatTimeInTimezone(startIso, tz);
+    const endLocal = formatTimeInTimezone(endIso, tz);
+    const sessionDate = new Date(startIso).toLocaleDateString("en-US", {
       timeZone: tz,
       weekday: "long",
       month: "short",
       day: "numeric",
     });
 
-    const greeting = student.primary_parent_name
-      ? `Hi ${student.primary_parent_name},`
+    const greeting = student.primaryParentName
+      ? `Hi ${student.primaryParentName},`
       : "Hi there,";
 
     const text = [
@@ -169,7 +170,7 @@ export async function sendDayOfReminders(
 </body></html>`;
 
     const res = await sendEmail({
-      to: student.primary_email,
+      to: student.primaryEmail,
       subject: `Reminder: ${studentName} has class today`,
       text,
       html,

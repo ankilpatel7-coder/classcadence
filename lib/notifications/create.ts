@@ -1,4 +1,6 @@
-import { createSupabaseServiceClient } from "@/lib/supabase/server";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { notifications, userProfiles } from "@/lib/db/schema";
 import { sendEmail, type SendEmailArgs } from "@/lib/email/client";
 import type { NotificationType } from "./types";
 
@@ -53,25 +55,19 @@ export async function createNotification(
   const inAppRecipients = args.inApp ?? [];
   if (inAppRecipients.length > 0) {
     try {
-      const service = createSupabaseServiceClient();
       const rows = inAppRecipients.map((r) => ({
-        tenant_id: args.tenantId,
-        user_id: r.user_id,
+        tenantId: args.tenantId,
+        userId: r.user_id,
         type: args.type,
         payload: args.payload,
       }));
-      const { error, data } = await service
-        .from("notifications")
-        .insert(rows)
-        .select("id");
-      if (error) {
-        console.error("[notifications] insert failed:", error.message);
-      } else {
-        result.inAppWritten = data?.length ?? 0;
-      }
+      const inserted = await db
+        .insert(notifications)
+        .values(rows)
+        .returning({ id: notifications.id });
+      result.inAppWritten = inserted.length;
     } catch (err) {
-      // Service-role client may throw if SUPABASE_SERVICE_ROLE_KEY is
-      // missing in this environment. We still want the email to fly.
+      // A notification miss should never roll back the domain action.
       console.error(
         "[notifications] in-app skipped:",
         err instanceof Error ? err.message : String(err)
@@ -117,13 +113,13 @@ export async function createNotification(
 // default in-app recipient list for tenant-scoped events.
 export async function tenantAdminUserIds(tenantId: string): Promise<string[]> {
   try {
-    const service = createSupabaseServiceClient();
-    const { data } = await service
-      .from("user_profiles")
-      .select("id")
-      .eq("tenant_id", tenantId)
-      .eq("role", "tenant_admin");
-    return (data ?? []).map((r) => r.id as string);
+    const rows = await db
+      .select({ id: userProfiles.id })
+      .from(userProfiles)
+      .where(
+        and(eq(userProfiles.tenantId, tenantId), eq(userProfiles.role, "tenant_admin"))
+      );
+    return rows.map((r) => r.id);
   } catch {
     return [];
   }

@@ -1,4 +1,14 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { and, asc, eq, gte, inArray, lte, ne } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  sessions,
+  timeSlots,
+  classrooms,
+  locations,
+  attendanceRecords,
+  students,
+  lessonNotes,
+} from "@/lib/db/schema";
 
 export type LoadedAttendance = {
   id: string;
@@ -26,131 +36,109 @@ export type LoadedSession = {
   attendance_records: LoadedAttendance[];
 };
 
-// Step-by-step fetch — avoids the deeply nested PostgREST embed that was
-// silently returning zero rows (sessions visible via RLS but the embed
-// drop). Each query here is flat and uses .in() lookups.
+// Step-by-step fetch. The session base query joins session -> time_slot ->
+// classroom -> location so we can enforce tenant isolation IN CODE (the owner
+// db connection bypasses RLS): filter on locations.tenantId. Attendance,
+// students, and notes are then pulled with flat inArray lookups.
 export async function loadSessionsInWindow(
+  tenantId: string,
   startUtcIso: string,
   endUtcIso: string
 ): Promise<LoadedSession[]> {
-  const supabase = createSupabaseServerClient();
+  const start = new Date(startUtcIso);
+  const end = new Date(endUtcIso);
 
-  const { data: rawSessions } = await supabase
-    .from("sessions")
-    .select("id, scheduled_start_utc, scheduled_end_utc, status, time_slot_id")
-    .gte("scheduled_start_utc", startUtcIso)
-    .lte("scheduled_start_utc", endUtcIso)
-    .neq("status", "cancelled")
-    .order("scheduled_start_utc", { ascending: true });
+  // sessions joined through to location — filtered by tenant. This both scopes
+  // by tenant and hydrates classroom/location in one pass.
+  const rawSessions = await db
+    .select({
+      id: sessions.id,
+      scheduledStartUtc: sessions.scheduledStartUtc,
+      scheduledEndUtc: sessions.scheduledEndUtc,
+      status: sessions.status,
+      classroomName: classrooms.name,
+      classroomColor: classrooms.color,
+      locationId: locations.id,
+      locationName: locations.name,
+      ianaTimezone: locations.ianaTimezone,
+    })
+    .from(sessions)
+    .innerJoin(timeSlots, eq(timeSlots.id, sessions.timeSlotId))
+    .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+    .innerJoin(locations, eq(locations.id, classrooms.locationId))
+    .where(
+      and(
+        gte(sessions.scheduledStartUtc, start),
+        lte(sessions.scheduledStartUtc, end),
+        ne(sessions.status, "cancelled"),
+        eq(locations.tenantId, tenantId)
+      )
+    )
+    .orderBy(asc(sessions.scheduledStartUtc));
 
-  if (!rawSessions || rawSessions.length === 0) return [];
+  if (rawSessions.length === 0) return [];
 
-  const slotIds = uniq(
-    rawSessions.map((s) => s.time_slot_id as string).filter(Boolean)
-  );
-  const sessionIds = rawSessions.map((s) => s.id as string);
+  const sessionIds = rawSessions.map((s) => s.id);
 
-  // Wave 1: slots + attendance can run in parallel — both only need sessionIds / slotIds.
-  // attendance_records uses select("*") so the query stays valid even if the
-  // is_makeup column hasn't been added to the DB yet (the field is just absent
-  // and treated as false by the consumer).
-  const [slotsResult, attendanceResult] = await Promise.all([
-    supabase.from("time_slots").select("id, classroom_id").in("id", slotIds),
-    supabase.from("attendance_records").select("*").in("session_id", sessionIds),
-  ]);
-  const slotsData = slotsResult.data ?? [];
-  const attendanceData = attendanceResult.data ?? [];
+  // Attendance for these sessions. Join on session_id (the enrolled session),
+  // never made_up_in_session_id. See [[attendance-sessions-embed]].
+  const attendanceData = await db
+    .select({
+      id: attendanceRecords.id,
+      sessionId: attendanceRecords.sessionId,
+      studentId: attendanceRecords.studentId,
+      status: attendanceRecords.status,
+      checkInAt: attendanceRecords.checkInAt,
+      checkOutAt: attendanceRecords.checkOutAt,
+    })
+    .from(attendanceRecords)
+    .where(inArray(attendanceRecords.sessionId, sessionIds));
 
-  const slotMap = new Map<string, { classroom_id: string }>(
-    slotsData.map((s) => [
-      s.id as string,
-      { classroom_id: s.classroom_id as string },
-    ])
-  );
+  if (attendanceData.length === 0) return [];
 
-  const classroomIds = uniq(
-    slotsData.map((s) => s.classroom_id as string).filter(Boolean)
-  );
-  const studentIds = uniq(
-    attendanceData.map((a) => a.student_id as string).filter(Boolean)
-  );
-  const attendanceIds = attendanceData.map((a) => a.id as string);
+  const studentIds = uniq(attendanceData.map((a) => a.studentId).filter(Boolean));
+  const attendanceIds = attendanceData.map((a) => a.id);
 
-  // Wave 2: classrooms + students + notes all in parallel.
-  const [classroomsResult, studentsResult, notesResult] = await Promise.all([
-    classroomIds.length > 0
-      ? supabase
-          .from("classrooms")
-          .select("id, name, color, location_id")
-          .in("id", classroomIds)
-      : Promise.resolve({ data: [] as { id: string; name: string; color: string; location_id: string }[] }),
+  const [studentsData, notesData] = await Promise.all([
     studentIds.length > 0
-      ? supabase
-          .from("students")
-          .select("id, first_name, last_name")
-          .in("id", studentIds)
-      : Promise.resolve({ data: [] as { id: string; first_name: string; last_name: string }[] }),
+      ? db
+          .select({
+            id: students.id,
+            firstName: students.firstName,
+            lastName: students.lastName,
+          })
+          .from(students)
+          .where(inArray(students.id, studentIds))
+      : Promise.resolve(
+          [] as { id: string; firstName: string; lastName: string }[]
+        ),
     attendanceIds.length > 0
-      ? supabase
-          .from("lesson_notes")
-          .select("attendance_record_id, body, visibility, created_at")
-          .in("attendance_record_id", attendanceIds)
-      : Promise.resolve({ data: [] as { attendance_record_id: string; body: string; visibility: string; created_at: string }[] }),
+      ? db
+          .select({
+            attendanceRecordId: lessonNotes.attendanceRecordId,
+            body: lessonNotes.body,
+            visibility: lessonNotes.visibility,
+            createdAt: lessonNotes.createdAt,
+          })
+          .from(lessonNotes)
+          .where(inArray(lessonNotes.attendanceRecordId, attendanceIds))
+      : Promise.resolve(
+          [] as {
+            attendanceRecordId: string;
+            body: string;
+            visibility: string;
+            createdAt: Date;
+          }[]
+        ),
   ]);
-  const classroomsData = classroomsResult.data ?? [];
-  const studentsData = studentsResult.data ?? [];
-  const notesData = notesResult.data ?? [];
-
-  const classroomMap = new Map<
-    string,
-    { name: string; color: string; location_id: string }
-  >(
-    classroomsData.map((c) => [
-      c.id as string,
-      {
-        name: c.name as string,
-        color: c.color as string,
-        location_id: c.location_id as string,
-      },
-    ])
-  );
-
-  // Wave 3: locations (needs classroomsData to know which to fetch).
-  const locationIds = uniq(
-    classroomsData.map((c) => c.location_id as string).filter(Boolean)
-  );
-  const { data: locationsData } =
-    locationIds.length > 0
-      ? await supabase
-          .from("locations")
-          .select("id, name, iana_timezone")
-          .in("id", locationIds)
-      : { data: [] };
-  const locationMap = new Map<
-    string,
-    { id: string; name: string; iana_timezone: string }
-  >(
-    (locationsData ?? []).map((l) => [
-      l.id as string,
-      {
-        id: l.id as string,
-        name: l.name as string,
-        iana_timezone: l.iana_timezone as string,
-      },
-    ])
-  );
 
   const studentMap = new Map<
     string,
     { id: string; first_name: string; last_name: string }
   >(
     studentsData.map((s) => [
-      s.id as string,
-      {
-        id: s.id as string,
-        first_name: s.first_name as string,
-        last_name: s.last_name as string,
-      },
+      s.id,
+      { id: s.id, first_name: s.firstName, last_name: s.lastName },
     ])
   );
 
@@ -159,59 +147,58 @@ export async function loadSessionsInWindow(
     { body: string; visibility: string; created_at: string }[]
   >();
   for (const n of notesData) {
-    const id = n.attendance_record_id as string;
+    const id = n.attendanceRecordId;
     const arr = notesByAttendance.get(id) ?? [];
     arr.push({
-      body: n.body as string,
-      visibility: n.visibility as string,
-      created_at: n.created_at as string,
+      body: n.body,
+      visibility: n.visibility,
+      created_at: n.createdAt.toISOString(),
     });
     notesByAttendance.set(id, arr);
   }
 
   const attendanceBySession = new Map<string, LoadedAttendance[]>();
-  for (const a of attendanceData ?? []) {
-    const student = studentMap.get(a.student_id as string);
+  for (const a of attendanceData) {
+    const student = studentMap.get(a.studentId);
     if (!student) continue;
-    const arr = attendanceBySession.get(a.session_id as string) ?? [];
+    const arr = attendanceBySession.get(a.sessionId) ?? [];
     arr.push({
-      id: a.id as string,
-      status: a.status as string,
-      check_in_at: a.check_in_at as string | null,
-      check_out_at: a.check_out_at as string | null,
-      is_makeup: Boolean((a as { is_makeup?: boolean }).is_makeup),
-      is_manual: Boolean((a as { is_manual?: boolean }).is_manual),
+      id: a.id,
+      status: a.status,
+      check_in_at: a.checkInAt ? a.checkInAt.toISOString() : null,
+      check_out_at: a.checkOutAt ? a.checkOutAt.toISOString() : null,
+      // is_makeup / is_manual are not modeled in the Drizzle schema; the
+      // consumer treats their absence as false.
+      is_makeup: false,
+      is_manual: false,
       students: student,
-      lesson_notes: notesByAttendance.get(a.id as string) ?? [],
+      lesson_notes: notesByAttendance.get(a.id) ?? [],
     });
-    attendanceBySession.set(a.session_id as string, arr);
+    attendanceBySession.set(a.sessionId, arr);
   }
 
   const out: LoadedSession[] = [];
   for (const s of rawSessions) {
-    const slot = slotMap.get(s.time_slot_id as string);
-    if (!slot) continue;
-    const classroom = classroomMap.get(slot.classroom_id);
-    if (!classroom) continue;
-    const location = locationMap.get(classroom.location_id);
-    if (!location) continue;
-
-    const records = attendanceBySession.get(s.id as string) ?? [];
+    const records = attendanceBySession.get(s.id) ?? [];
     // Skip empty sessions — Today and Schedule only show classes with at
     // least one enrolled student. Empty slots clutter the view without
     // adding info.
     if (records.length === 0) continue;
 
     out.push({
-      id: s.id as string,
-      scheduled_start_utc: s.scheduled_start_utc as string,
-      scheduled_end_utc: s.scheduled_end_utc as string,
-      status: s.status as string,
+      id: s.id,
+      scheduled_start_utc: s.scheduledStartUtc.toISOString(),
+      scheduled_end_utc: s.scheduledEndUtc.toISOString(),
+      status: s.status,
       time_slots: {
         classrooms: {
-          name: classroom.name,
-          color: classroom.color,
-          locations: location,
+          name: s.classroomName,
+          color: s.classroomColor ?? "",
+          locations: {
+            id: s.locationId,
+            name: s.locationName,
+            iana_timezone: s.ianaTimezone,
+          },
         },
       },
       attendance_records: records,

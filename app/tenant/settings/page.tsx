@@ -1,4 +1,15 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { count, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  locations,
+  classrooms,
+  timeSlots,
+  students,
+  enrollments,
+  sessions,
+  attendanceRecords,
+  brandingAssets,
+} from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import {
   DatabaseLink,
@@ -12,14 +23,10 @@ import { BrandingForm } from "./BrandingForm";
 export const metadata = { title: "Settings — ClassCadence" };
 export const dynamic = "force-dynamic";
 
-async function countOf(
-  supabase: ReturnType<typeof createSupabaseServerClient>,
-  table: string
+async function counted(
+  rows: Promise<{ value: number }[]>
 ): Promise<number> {
-  const { count } = await supabase
-    .from(table)
-    .select("id", { count: "exact", head: true });
-  return count ?? 0;
+  return (await rows)[0]?.value ?? 0;
 }
 
 const TIER_LIMITS = {
@@ -46,8 +53,11 @@ export default async function SettingsPage({
     );
   }
 
-  const supabase = createSupabaseServerClient();
+  const tenantId = user.tenantId!;
 
+  // Owner connection bypasses RLS — every count is scoped to this tenant in
+  // code. classrooms / time_slots / sessions / attendance / enrollments have no
+  // direct tenant_id, so we join up to locations (which does) to scope them.
   const [
     locationCount,
     classroomCount,
@@ -57,13 +67,56 @@ export default async function SettingsPage({
     sessionCount,
     attendanceCount,
   ] = await Promise.all([
-    countOf(supabase, "locations"),
-    countOf(supabase, "classrooms"),
-    countOf(supabase, "time_slots"),
-    countOf(supabase, "students"),
-    countOf(supabase, "enrollments"),
-    countOf(supabase, "sessions"),
-    countOf(supabase, "attendance_records"),
+    counted(
+      db
+        .select({ value: count() })
+        .from(locations)
+        .where(eq(locations.tenantId, tenantId))
+    ),
+    counted(
+      db
+        .select({ value: count() })
+        .from(classrooms)
+        .innerJoin(locations, eq(locations.id, classrooms.locationId))
+        .where(eq(locations.tenantId, tenantId))
+    ),
+    counted(
+      db
+        .select({ value: count() })
+        .from(timeSlots)
+        .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+        .innerJoin(locations, eq(locations.id, classrooms.locationId))
+        .where(eq(locations.tenantId, tenantId))
+    ),
+    counted(
+      db
+        .select({ value: count() })
+        .from(students)
+        .where(eq(students.tenantId, tenantId))
+    ),
+    counted(
+      db
+        .select({ value: count() })
+        .from(enrollments)
+        .innerJoin(students, eq(students.id, enrollments.studentId))
+        .where(eq(students.tenantId, tenantId))
+    ),
+    counted(
+      db
+        .select({ value: count() })
+        .from(sessions)
+        .innerJoin(timeSlots, eq(timeSlots.id, sessions.timeSlotId))
+        .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+        .innerJoin(locations, eq(locations.id, classrooms.locationId))
+        .where(eq(locations.tenantId, tenantId))
+    ),
+    counted(
+      db
+        .select({ value: count() })
+        .from(attendanceRecords)
+        .innerJoin(students, eq(students.id, attendanceRecords.studentId))
+        .where(eq(students.tenantId, tenantId))
+    ),
   ]);
 
   // Quick rough estimate of row count to give a "you're nowhere near the
@@ -77,11 +130,15 @@ export default async function SettingsPage({
     sessionCount +
     attendanceCount;
 
-  const { data: branding } = await supabase
-    .from("branding_assets")
-    .select("primary_color_hex, logo_url, sender_display_name")
-    .eq("tenant_id", user.tenantId)
-    .maybeSingle();
+  const [branding] = await db
+    .select({
+      primary_color_hex: brandingAssets.primaryColorHex,
+      logo_url: brandingAssets.logoUrl,
+      sender_display_name: brandingAssets.senderDisplayName,
+    })
+    .from(brandingAssets)
+    .where(eq(brandingAssets.tenantId, tenantId))
+    .limit(1);
 
   const seededHouseholds = searchParams.seeded_households;
   const wipedAll = searchParams.wiped_all;

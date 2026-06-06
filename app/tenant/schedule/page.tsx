@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { and, asc, eq, gte, lte } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { locations as locationsTable, sessions as sessionsTable } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import {
   formatTimeInTimezone,
@@ -84,15 +86,27 @@ export default async function SchedulePage({
   searchParams: { start?: string };
 }) {
   const user = await getCurrentUserOrRedirect();
-  const supabase = createSupabaseServerClient();
 
-  const { data: locations } = await supabase
-    .from("locations")
-    .select("id, name, iana_timezone")
-    .eq("status", "active")
-    .order("created_at", { ascending: true });
+  // App-level tenant isolation: the owner db connection bypasses RLS, so scope
+  // every query by the caller's tenantId.
+  const tenantId = user.tenantId!;
 
-  const primaryLocation = locations?.[0];
+  const locations = await db
+    .select({
+      id: locationsTable.id,
+      name: locationsTable.name,
+      iana_timezone: locationsTable.ianaTimezone,
+    })
+    .from(locationsTable)
+    .where(
+      and(
+        eq(locationsTable.tenantId, tenantId),
+        eq(locationsTable.status, "active")
+      )
+    )
+    .orderBy(asc(locationsTable.createdAt));
+
+  const primaryLocation = locations[0];
   const primaryTz = primaryLocation?.iana_timezone ?? "UTC";
   const today = todayKey(primaryTz);
 
@@ -108,17 +122,25 @@ export default async function SchedulePage({
   const windowStartUtc = localToUtc(start, "00:00", primaryTz).toISOString();
   const windowEndUtc = localToUtc(lastDay, "23:59", primaryTz).toISOString();
 
-  const loaded = await loadSessionsInWindow(windowStartUtc, windowEndUtc);
+  const loaded = await loadSessionsInWindow(
+    tenantId,
+    windowStartUtc,
+    windowEndUtc
+  );
   const sessions = loaded;
 
   let diagnosticBareCount: number | null = null;
   if (sessions.length === 0) {
-    const { count } = await supabase
-      .from("sessions")
-      .select("id", { count: "exact", head: true })
-      .gte("scheduled_start_utc", windowStartUtc)
-      .lte("scheduled_start_utc", windowEndUtc);
-    diagnosticBareCount = count ?? 0;
+    const bare = await db
+      .select({ id: sessionsTable.id })
+      .from(sessionsTable)
+      .where(
+        and(
+          gte(sessionsTable.scheduledStartUtc, new Date(windowStartUtc)),
+          lte(sessionsTable.scheduledStartUtc, new Date(windowEndUtc))
+        )
+      );
+    diagnosticBareCount = bare.length;
     console.log(
       "[schedule] empty render — tenantId:",
       user.tenantId,

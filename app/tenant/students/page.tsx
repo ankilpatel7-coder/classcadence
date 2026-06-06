@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { GraduationCap, Pencil, Plus } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { asc, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { students, locations } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 
 export const dynamic = "force-dynamic";
@@ -31,18 +33,25 @@ export default async function StudentsPage({
 }: {
   searchParams: { deleted?: string; error?: string };
 }) {
-  await getCurrentUserOrRedirect();
-  const supabase = createSupabaseServerClient();
+  const user = await getCurrentUserOrRedirect();
 
-  const { data, error } = await supabase
-    .from("students")
-    .select(
-      "id, first_name, last_name, grade_level, lifecycle_status, primary_parent_name, primary_email, primary_phone, locations(id, name)"
-    )
-    .order("last_name", { ascending: true })
-    .order("first_name", { ascending: true });
-
-  const rows = (data ?? []) as unknown as Row[];
+  // App-level tenant isolation: only this tenant's students.
+  const rows: Row[] = await db
+    .select({
+      id: students.id,
+      first_name: students.firstName,
+      last_name: students.lastName,
+      grade_level: students.gradeLevel,
+      lifecycle_status: students.lifecycleStatus,
+      primary_parent_name: students.primaryParentName,
+      primary_email: students.primaryEmail,
+      primary_phone: students.primaryPhone,
+      locations: { id: locations.id, name: locations.name },
+    })
+    .from(students)
+    .innerJoin(locations, eq(locations.id, students.locationId))
+    .where(eq(students.tenantId, user.tenantId!))
+    .orderBy(asc(students.lastName), asc(students.firstName));
 
   return (
     <div className="space-y-6">
@@ -67,11 +76,6 @@ export default async function StudentsPage({
       {searchParams.error ? (
         <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
           {decodeURIComponent(searchParams.error)}
-        </div>
-      ) : null}
-      {error ? (
-        <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
-          Failed to load students: {error.message}
         </div>
       ) : null}
 

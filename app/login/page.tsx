@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { postLoginPathForRole, type AppRole } from "@/lib/auth/post-login-redirect";
+import { postLoginPathForRole } from "@/lib/auth/post-login-redirect";
+import { getCurrentUser } from "@/lib/auth/current-user";
 import { Logo } from "@/app/_components/Logo";
 import { LoginForm } from "./LoginForm";
 
@@ -10,18 +10,10 @@ export const metadata = {
 };
 
 export default async function LoginPage() {
-  const supabase = createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (user) {
-    const { data: profile } = await supabase
-      .from("user_profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-    const target = postLoginPathForRole(profile?.role as AppRole);
+    const target = postLoginPathForRole(user.role);
     if (target !== "/") redirect(target);
   }
 

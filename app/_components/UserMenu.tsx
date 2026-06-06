@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { KeyRound, LogOut } from "lucide-react";
-import { signOutAction } from "@/app/login/actions";
+import { authClient } from "@/lib/auth/client";
 
 function initialsFrom(name: string, email: string): string {
   const source = name?.trim() || email;
@@ -26,6 +27,13 @@ export function UserMenu({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+
+  async function handleSignOut() {
+    await authClient.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
@@ -90,15 +98,14 @@ export function UserMenu({
               <KeyRound className="h-4 w-4 text-muted" />
               Change password
             </Link>
-            <form action={signOutAction}>
-              <button
-                type="submit"
-                className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-danger transition hover:bg-danger/5"
-              >
-                <LogOut className="h-4 w-4" />
-                Sign out
-              </button>
-            </form>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-danger transition hover:bg-danger/5"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </button>
           </div>
         </div>
       ) : null}

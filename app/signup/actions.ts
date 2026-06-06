@@ -1,7 +1,9 @@
 "use server";
 
 import { z } from "zod";
-import { createSupabaseServiceClient } from "@/lib/supabase/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { userProfiles } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/email/client";
 
 const SignupSchema = z.object({
@@ -46,15 +48,14 @@ export async function submitSignupAction(
   }
 
   // Look up every super_admin so additional super admins (if any) all get
-  // notified. Service role bypasses RLS.
+  // notified. Owner connection bypasses RLS.
   let superAdminEmails: string[] = [];
   try {
-    const service = createSupabaseServiceClient();
-    const { data } = await service
-      .from("user_profiles")
-      .select("email")
-      .eq("role", "super_admin");
-    superAdminEmails = (data ?? [])
+    const data = await db
+      .select({ email: userProfiles.email })
+      .from(userProfiles)
+      .where(eq(userProfiles.role, "super_admin"));
+    superAdminEmails = data
       .map((r) => (r.email as string | null) ?? "")
       .filter((e) => e.includes("@"));
   } catch (err) {

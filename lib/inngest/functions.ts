@@ -1,17 +1,16 @@
-import { createClient } from "@supabase/supabase-js";
+import { and, eq, inArray, lte, ne, sql } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  timeSlots,
+  classrooms,
+  locations,
+  sessions,
+  enrollments,
+  attendanceRecords,
+} from "@/lib/db/schema";
 import { inngest } from "./client";
 import { datesForWeekdayInRange, localToUtc } from "@/lib/time";
 import { sendDayOfReminders } from "@/lib/notifications/reminders";
-
-function adminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  );
-}
-
-type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
 // Daily materialization (BA: 06:00 local-per-location). For v1 we run it at
 // 06:00 UTC for simplicity; per-location-tz scheduling will come in a follow-up.
@@ -21,87 +20,98 @@ export const materializeDaily = inngest.createFunction(
   { cron: "0 6 * * *" },
   async ({ step }) => {
     await step.run("materialize-14-days", async () => {
-      const supabase = adminClient();
       const now = new Date();
       const until = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-      type SlotRow = {
-        id: string;
-        weekday: Weekday;
-        start_time: string;
-        end_time: string;
-        classrooms: {
-          status: string;
-          locations: { id: string; iana_timezone: string; status: string };
-        };
-      };
-
-      const { data: slots } = await supabase
-        .from("time_slots")
-        .select(
-          "id, weekday, start_time, end_time, status, classrooms!inner(status, locations!inner(id, iana_timezone, status))"
-        )
-        .eq("status", "active");
-
-      const active = ((slots ?? []) as unknown as SlotRow[]).filter(
-        (s) =>
-          s.classrooms?.status === "active" && s.classrooms?.locations?.status === "active"
-      );
+      // Active slots whose classroom AND location are also active.
+      const active = await db
+        .select({
+          id: timeSlots.id,
+          weekday: timeSlots.weekday,
+          startTime: timeSlots.startTime,
+          endTime: timeSlots.endTime,
+          tz: locations.ianaTimezone,
+        })
+        .from(timeSlots)
+        .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+        .innerJoin(locations, eq(locations.id, classrooms.locationId))
+        .where(
+          and(
+            eq(timeSlots.status, "active"),
+            eq(classrooms.status, "active"),
+            eq(locations.status, "active")
+          )
+        );
 
       let sessionsInserted = 0;
       let attendanceInserted = 0;
 
       for (const slot of active) {
-        const tz = slot.classrooms.locations.iana_timezone;
+        const tz = slot.tz;
         const dates = datesForWeekdayInRange(slot.weekday, now, until, tz);
         if (dates.length === 0) continue;
-        const sStart = slot.start_time.slice(0, 5);
-        const sEnd = slot.end_time.slice(0, 5);
+        const sStart = slot.startTime.slice(0, 5);
+        const sEnd = slot.endTime.slice(0, 5);
         const rows = dates.map((d) => ({
-          time_slot_id: slot.id,
-          scheduled_start_utc: localToUtc(d, sStart, tz).toISOString(),
-          scheduled_end_utc: localToUtc(d, sEnd, tz).toISOString(),
+          timeSlotId: slot.id,
+          scheduledStartUtc: localToUtc(d, sStart, tz),
+          scheduledEndUtc: localToUtc(d, sEnd, tz),
         }));
-        const { data: upserted } = await supabase
-          .from("sessions")
-          .upsert(rows, {
-            onConflict: "time_slot_id,scheduled_start_utc",
-            ignoreDuplicates: false,
+
+        // ON CONFLICT DO UPDATE ... RETURNING gives us both inserted and
+        // existing rows for this slot's dates (so attendance can be filled in).
+        const upserted = await db
+          .insert(sessions)
+          .values(rows)
+          .onConflictDoUpdate({
+            target: [sessions.timeSlotId, sessions.scheduledStartUtc],
+            set: { scheduledEndUtc: sql`excluded.scheduled_end_utc` },
           })
-          .select("id, scheduled_start_utc");
-        sessionsInserted += upserted?.length ?? 0;
+          .returning({
+            id: sessions.id,
+            scheduledStartUtc: sessions.scheduledStartUtc,
+          });
+        sessionsInserted += upserted.length;
 
         const earliest = dates[0];
         const latest = dates[dates.length - 1];
-        const { data: enrollments } = await supabase
-          .from("enrollments")
-          .select("id, student_id, effective_from, effective_to")
-          .eq("time_slot_id", slot.id)
-          .lte("effective_from", latest);
+        const enrolled = await db
+          .select({
+            studentId: enrollments.studentId,
+            effectiveFrom: enrollments.effectiveFrom,
+            effectiveTo: enrollments.effectiveTo,
+          })
+          .from(enrollments)
+          .where(
+            and(
+              eq(enrollments.timeSlotId, slot.id),
+              lte(enrollments.effectiveFrom, latest)
+            )
+          );
 
-        const attendanceRows: { session_id: string; student_id: string }[] = [];
-        for (const session of upserted ?? []) {
-          const sessionDate = String(session.scheduled_start_utc).slice(0, 10);
-          for (const en of enrollments ?? []) {
-            if ((en.effective_from as string) > latest) continue;
-            if (en.effective_to && (en.effective_to as string) < earliest) continue;
-            if ((en.effective_from as string) > sessionDate) continue;
-            if (en.effective_to && (en.effective_to as string) < sessionDate) continue;
+        const attendanceRows: { sessionId: string; studentId: string }[] = [];
+        for (const session of upserted) {
+          const sessionDate = session.scheduledStartUtc.toISOString().slice(0, 10);
+          for (const en of enrolled) {
+            if (en.effectiveFrom > latest) continue;
+            if (en.effectiveTo && en.effectiveTo < earliest) continue;
+            if (en.effectiveFrom > sessionDate) continue;
+            if (en.effectiveTo && en.effectiveTo < sessionDate) continue;
             attendanceRows.push({
-              session_id: session.id as string,
-              student_id: en.student_id as string,
+              sessionId: session.id,
+              studentId: en.studentId,
             });
           }
         }
         if (attendanceRows.length > 0) {
-          const { data: att } = await supabase
-            .from("attendance_records")
-            .upsert(attendanceRows, {
-              onConflict: "session_id,student_id",
-              ignoreDuplicates: true,
+          const att = await db
+            .insert(attendanceRecords)
+            .values(attendanceRows)
+            .onConflictDoNothing({
+              target: [attendanceRecords.sessionId, attendanceRecords.studentId],
             })
-            .select("id");
-          attendanceInserted += att?.length ?? 0;
+            .returning({ id: attendanceRecords.id });
+          attendanceInserted += att.length;
         }
       }
 
@@ -112,14 +122,7 @@ export const materializeDaily = inngest.createFunction(
 
 // Day-of class reminder. Fires once per morning (UTC) and sends a single
 // reminder email per (student, session) for any session starting in the
-// next 18 hours where the student is still 'expected'. 18h matches a
-// typical morning-of cadence: a 7am CST cron fires at 12 UTC, catching
-// every class up through about 6am the next day in tenant-local time.
-//
-// Idempotency: Inngest's step.run is checkpointed, so within a single
-// execution we won't double-send. Across separate firings (manual
-// re-trigger), a parent could in rare cases receive two reminders for
-// the same session — acceptable for v1; we'll add dedup if it bites.
+// next 18 hours where the student is still 'expected'.
 export const dayOfRemindersFn = inngest.createFunction(
   { id: "day-of-reminders", name: "Day-of class reminder emails" },
   { cron: "0 12 * * *" }, // 12:00 UTC = ~7am CDT / 8am CST / 5am PDT
@@ -138,27 +141,30 @@ export const markAbsentFn = inngest.createFunction(
   { cron: "*/15 * * * *" },
   async ({ step }) => {
     await step.run("mark", async () => {
-      const supabase = adminClient();
-      const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const cutoff = new Date(Date.now() - 30 * 60 * 1000);
 
-      // Find sessions that ended at least 30 min ago and have any still-expected attendance.
-      const { data: sessions } = await supabase
-        .from("sessions")
-        .select("id")
-        .lte("scheduled_end_utc", cutoff)
-        .neq("status", "cancelled");
+      const ended = await db
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(
+          and(lte(sessions.scheduledEndUtc, cutoff), ne(sessions.status, "cancelled"))
+        );
 
-      const sessionIds = (sessions ?? []).map((s) => s.id as string);
+      const sessionIds = ended.map((s) => s.id);
       if (sessionIds.length === 0) return { markedAbsent: 0 };
 
-      const { data: marked, error } = await supabase
-        .from("attendance_records")
-        .update({ status: "absent" })
-        .eq("status", "expected")
-        .in("session_id", sessionIds)
-        .select("id");
-      if (error) throw error;
-      return { markedAbsent: marked?.length ?? 0 };
+      const marked = await db
+        .update(attendanceRecords)
+        .set({ status: "absent" })
+        .where(
+          and(
+            eq(attendanceRecords.status, "expected"),
+            inArray(attendanceRecords.sessionId, sessionIds)
+          )
+        )
+        .returning({ id: attendanceRecords.id });
+
+      return { markedAbsent: marked.length };
     });
   }
 );

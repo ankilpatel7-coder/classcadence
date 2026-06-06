@@ -1,50 +1,12 @@
 "use server";
 
-import { redirect } from "next/navigation";
-import { z } from "zod";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { postLoginPathForRole, type AppRole } from "@/lib/auth/post-login-redirect";
+import { getCurrentUser } from "@/lib/auth/current-user";
+import { postLoginPathForRole } from "@/lib/auth/post-login-redirect";
 
-const LoginSchema = z.object({
-  email: z.string().email("Enter a valid email address."),
-  password: z.string().min(1, "Password is required."),
-});
-
-export type LoginState = { error: string | null };
-
-export async function signInAction(
-  _prev: LoginState,
-  formData: FormData
-): Promise<LoginState> {
-  const parsed = LoginSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-  });
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid credentials." };
-  }
-
-  const supabase = createSupabaseServerClient();
-  const { data: signIn, error } = await supabase.auth.signInWithPassword(parsed.data);
-
-  if (error || !signIn.user) {
-    return { error: "Sign-in failed. Check your email and password." };
-  }
-
-  // Filter by id explicitly — super_admin RLS lets the caller read every profile,
-  // so .single() would error with PGRST116 if any other profile rows exist.
-  const { data: profile } = await supabase
-    .from("user_profiles")
-    .select("role")
-    .eq("id", signIn.user.id)
-    .single();
-
-  redirect(postLoginPathForRole(profile?.role as AppRole));
-}
-
-export async function signOutAction() {
-  const supabase = createSupabaseServerClient();
-  await supabase.auth.signOut();
-  redirect("/login");
+// Sign-in/sign-out now happen client-side via the Neon Auth (Better Auth)
+// client, which manages session cookies in the browser. After a successful
+// client sign-in, the form calls this to resolve where the user's role lands.
+export async function resolvePostLoginPath(): Promise<string> {
+  const user = await getCurrentUser();
+  return postLoginPathForRole(user?.role ?? null);
 }

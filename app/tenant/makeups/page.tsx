@@ -1,6 +1,16 @@
 import Link from "next/link";
 import { Sparkles, UserPlus, X } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { and, eq, gte, inArray, desc } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  attendanceRecords,
+  sessions,
+  timeSlots,
+  classrooms,
+  locations,
+  students,
+  makeupOffers,
+} from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { formatTimeInTimezone } from "@/lib/time";
 import { StudentAvatar } from "@/app/_components/StudentAvatar";
@@ -38,142 +48,83 @@ export default async function MakeupsPage({
     manual_added?: string;
   };
 }) {
-  await getCurrentUserOrRedirect();
-  const supabase = createSupabaseServerClient();
+  const user = await getCurrentUserOrRedirect();
 
-  const thirtyDaysAgo = new Date(
-    Date.now() - 30 * 24 * 60 * 60 * 1000
-  ).toISOString();
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  // Step 1: attendance rows marked absent OR made_up in the past 30 days.
-  const { data: attendanceData } = await supabase
-    .from("attendance_records")
-    .select("id, status, session_id, student_id")
-    .in("status", ["absent", "made_up"]);
+  // Attendance rows marked absent OR made_up in the past 30 days, joined
+  // through session -> time_slot -> classroom -> location so we can both
+  // enforce tenant isolation in code and surface the schedule details.
+  // Join on session_id (the enrolled session) — see [[attendance-sessions-embed]].
+  const attendanceRows = await db
+    .select({
+      attendanceId: attendanceRecords.id,
+      status: attendanceRecords.status,
+      studentId: attendanceRecords.studentId,
+      sessionStartUtc: sessions.scheduledStartUtc,
+      sessionEndUtc: sessions.scheduledEndUtc,
+      classroomName: classrooms.name,
+      classroomColor: classrooms.color,
+      locationName: locations.name,
+      tz: locations.ianaTimezone,
+      studentFirstName: students.firstName,
+      studentLastName: students.lastName,
+    })
+    .from(attendanceRecords)
+    .innerJoin(sessions, eq(sessions.id, attendanceRecords.sessionId))
+    .innerJoin(timeSlots, eq(timeSlots.id, sessions.timeSlotId))
+    .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+    .innerJoin(locations, eq(locations.id, classrooms.locationId))
+    .innerJoin(students, eq(students.id, attendanceRecords.studentId))
+    .where(
+      and(
+        inArray(attendanceRecords.status, ["absent", "made_up"]),
+        gte(sessions.scheduledStartUtc, thirtyDaysAgo),
+        eq(locations.tenantId, user.tenantId!)
+      )
+    )
+    .orderBy(desc(sessions.scheduledStartUtc));
 
-  const attendanceIds = (attendanceData ?? []).map((a) => a.id as string);
-  const sessionIds = Array.from(
-    new Set((attendanceData ?? []).map((a) => a.session_id as string))
-  );
-  const studentIds = Array.from(
-    new Set((attendanceData ?? []).map((a) => a.student_id as string))
-  );
-
-  if (attendanceIds.length === 0) {
+  if (attendanceRows.length === 0) {
     return <EmptyState />;
   }
 
-  // Step 2: pull sessions, students, and any existing make-up offers in parallel.
-  const [sessionsResult, studentsResult, offersResult] = await Promise.all([
-    supabase
-      .from("sessions")
-      .select("id, scheduled_start_utc, scheduled_end_utc, time_slot_id")
-      .in("id", sessionIds)
-      .gte("scheduled_start_utc", thirtyDaysAgo)
-      .order("scheduled_start_utc", { ascending: false }),
-    supabase
-      .from("students")
-      .select("id, first_name, last_name")
-      .in("id", studentIds),
-    supabase
-      .from("makeup_offers")
-      .select("absent_attendance_id, state, expires_at")
-      .in("absent_attendance_id", attendanceIds),
-  ]);
+  const attendanceIds = attendanceRows.map((a) => a.attendanceId);
 
-  const sessionsArr = sessionsResult.data ?? [];
-  const studentsArr = studentsResult.data ?? [];
-  const offersArr = offersResult.data ?? [];
+  const offersArr = await db
+    .select({
+      absentAttendanceId: makeupOffers.absentAttendanceId,
+      state: makeupOffers.state,
+      expiresAt: makeupOffers.expiresAt,
+    })
+    .from(makeupOffers)
+    .where(inArray(makeupOffers.absentAttendanceId, attendanceIds));
 
-  const slotIds = Array.from(
-    new Set(sessionsArr.map((s) => s.time_slot_id as string))
-  );
-  const { data: slotsData } = await supabase
-    .from("time_slots")
-    .select("id, classroom_id")
-    .in("id", slotIds);
-
-  const classroomIds = Array.from(
-    new Set((slotsData ?? []).map((s) => s.classroom_id as string))
-  );
-  const { data: classroomsData } = await supabase
-    .from("classrooms")
-    .select("id, name, color, location_id")
-    .in("id", classroomIds);
-
-  const locationIds = Array.from(
-    new Set((classroomsData ?? []).map((c) => c.location_id as string))
-  );
-  const { data: locationsData } = await supabase
-    .from("locations")
-    .select("id, name, iana_timezone")
-    .in("id", locationIds);
-
-  const sessionMap = new Map(sessionsArr.map((s) => [s.id as string, s]));
-  const slotMap = new Map(
-    (slotsData ?? []).map((s) => [s.id as string, s.classroom_id as string])
-  );
-  const classroomMap = new Map(
-    (classroomsData ?? []).map((c) => [
-      c.id as string,
-      {
-        name: c.name as string,
-        color: c.color as string,
-        location_id: c.location_id as string,
-      },
-    ])
-  );
-  const locationMap = new Map(
-    (locationsData ?? []).map((l) => [
-      l.id as string,
-      { name: l.name as string, iana_timezone: l.iana_timezone as string },
-    ])
-  );
-  const studentMap = new Map(
-    studentsArr.map((s) => [
-      s.id as string,
-      `${s.first_name ?? ""} ${s.last_name ?? ""}`.trim(),
-    ])
-  );
   const offerMap = new Map(
     offersArr.map((o) => [
-      o.absent_attendance_id as string,
+      o.absentAttendanceId,
       {
         state: o.state as "pending" | "accepted" | "declined" | "expired",
-        expiresAt: o.expires_at as string,
+        expiresAt: o.expiresAt.toISOString(),
       },
     ])
   );
 
-  const rows: AbsenceRow[] = (attendanceData ?? [])
-    .map<AbsenceRow | null>((a) => {
-      const session = sessionMap.get(a.session_id as string);
-      if (!session) return null;
-      const classroomId = slotMap.get(session.time_slot_id as string);
-      if (!classroomId) return null;
-      const classroom = classroomMap.get(classroomId);
-      if (!classroom) return null;
-      const location = locationMap.get(classroom.location_id);
-      if (!location) return null;
-      const studentName = studentMap.get(a.student_id as string) ?? "Unknown";
-      return {
-        attendanceId: a.id as string,
-        status: a.status as string,
-        sessionStartUtc: session.scheduled_start_utc as string,
-        sessionEndUtc: session.scheduled_end_utc as string,
-        tz: location.iana_timezone,
-        classroomName: classroom.name,
-        classroomColor: classroom.color,
-        locationName: location.name,
-        studentName,
-        studentId: a.student_id as string,
-        offer: offerMap.get(a.id as string) ?? null,
-      };
-    })
-    .filter((x): x is AbsenceRow => x !== null)
-    .sort((a, b) =>
-      b.sessionStartUtc.localeCompare(a.sessionStartUtc)
-    );
+  const rows: AbsenceRow[] = attendanceRows.map((a) => ({
+    attendanceId: a.attendanceId,
+    status: a.status,
+    sessionStartUtc: a.sessionStartUtc.toISOString(),
+    sessionEndUtc: a.sessionEndUtc.toISOString(),
+    tz: a.tz,
+    classroomName: a.classroomName,
+    classroomColor: a.classroomColor ?? "#1E3A8A",
+    locationName: a.locationName,
+    studentName:
+      `${a.studentFirstName ?? ""} ${a.studentLastName ?? ""}`.trim() ||
+      "Unknown",
+    studentId: a.studentId,
+    offer: offerMap.get(a.attendanceId) ?? null,
+  }));
 
   const needsOffer = rows.filter(
     (r) => r.status === "absent" && (!r.offer || r.offer.state === "expired" || r.offer.state === "declined")

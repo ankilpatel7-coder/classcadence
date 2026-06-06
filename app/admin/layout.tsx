@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { signOutAction } from "@/app/login/actions";
+import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { Logo } from "@/app/_components/Logo";
 import { UserMenu } from "@/app/_components/UserMenu";
 import { NavLinks } from "@/app/_components/NavLinks";
@@ -17,21 +16,9 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = createSupabaseServerClient();
+  const profile = await getCurrentUserOrRedirect();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase
-    .from("user_profiles")
-    .select("role, full_name, email")
-    .eq("id", user.id)
-    .single();
-
-  if (profile?.role !== "super_admin") redirect("/login");
+  if (profile.role !== "super_admin") redirect("/login");
 
   return (
     <div className="min-h-screen">
@@ -58,7 +45,7 @@ export default async function AdminLayout({
 
           <div className="flex items-center gap-3">
             <UserMenu
-              fullName={profile.full_name || ""}
+              fullName={profile.fullName || ""}
               email={profile.email}
               subtitle="Super Admin"
             />

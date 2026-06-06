@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { and, asc, eq, gt, inArray, isNull, or } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  students,
+  locations,
+  enrollments,
+  timeSlots,
+  classrooms,
+} from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { EditStudentForm } from "./EditStudentForm";
 import {
@@ -40,61 +48,82 @@ export default async function EditStudentPage({
   params: { id: string };
   searchParams: { created?: string; saved?: string; error?: string; ended?: string };
 }) {
-  await getCurrentUserOrRedirect();
-  const supabase = createSupabaseServerClient();
+  const user = await getCurrentUserOrRedirect();
 
-  const { data: student } = await supabase
-    .from("students")
-    .select(
-      "id, location_id, first_name, last_name, dob, grade_level, lifecycle_status, internal_notes, primary_parent_name, primary_email, primary_phone, secondary_parent_name, secondary_email, secondary_phone, mailing_address, notification_prefs_json"
-    )
-    .eq("id", params.id)
-    .maybeSingle();
+  // App-level tenant isolation: scope the student lookup to this tenant.
+  const [student] = await db
+    .select({
+      id: students.id,
+      location_id: students.locationId,
+      first_name: students.firstName,
+      last_name: students.lastName,
+      dob: students.dob,
+      grade_level: students.gradeLevel,
+      lifecycle_status: students.lifecycleStatus,
+      internal_notes: students.internalNotes,
+      primary_parent_name: students.primaryParentName,
+      primary_email: students.primaryEmail,
+      primary_phone: students.primaryPhone,
+      secondary_parent_name: students.secondaryParentName,
+      secondary_email: students.secondaryEmail,
+      secondary_phone: students.secondaryPhone,
+      mailing_address: students.mailingAddress,
+      notification_prefs_json: students.notificationPrefsJson,
+    })
+    .from(students)
+    .where(and(eq(students.id, params.id), eq(students.tenantId, user.tenantId!)))
+    .limit(1);
   if (!student) notFound();
   const s = student as StudentRow;
-  const notify = s.notification_prefs_json ?? { email: true, whatsapp: true };
+  const notify =
+    (s.notification_prefs_json as { email?: boolean; whatsapp?: boolean } | null) ?? {
+      email: true,
+      whatsapp: true,
+    };
 
-  const { data: locations } = await supabase
-    .from("locations").select("id, name").order("name");
+  // Only this tenant's locations.
+  const locationsList = await db
+    .select({ id: locations.id, name: locations.name })
+    .from(locations)
+    .where(eq(locations.tenantId, user.tenantId!))
+    .orderBy(asc(locations.name));
 
   const today = new Date().toISOString().slice(0, 10);
 
   // 1) Every active enrollment for this student — shown at the top of the
   //    section so the front desk can see exactly what they're enrolled in
   //    (even if the slot's classroom/location has been deactivated since).
-  const { data: myEnrollmentsRaw } = await supabase
-    .from("enrollments")
-    .select(
-      "id, time_slots!inner(weekday, start_time, end_time, classrooms!inner(id, name, color, locations!inner(name)))"
-    )
-    .eq("student_id", s.id)
-    .or(`effective_to.is.null,effective_to.gt.${today}`);
+  const myEnrollmentsRaw = await db
+    .select({
+      id: enrollments.id,
+      weekday: timeSlots.weekday,
+      start_time: timeSlots.startTime,
+      end_time: timeSlots.endTime,
+      classroom_id: classrooms.id,
+      classroom_name: classrooms.name,
+      classroom_color: classrooms.color,
+      location_name: locations.name,
+    })
+    .from(enrollments)
+    .innerJoin(timeSlots, eq(timeSlots.id, enrollments.timeSlotId))
+    .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+    .innerJoin(locations, eq(locations.id, classrooms.locationId))
+    .where(
+      and(
+        eq(enrollments.studentId, s.id),
+        or(isNull(enrollments.effectiveTo), gt(enrollments.effectiveTo, today))
+      )
+    );
 
-  type MyEnrRaw = {
-    id: string;
-    time_slots: {
-      weekday: string;
-      start_time: string;
-      end_time: string;
-      classrooms: {
-        id: string;
-        name: string;
-        color: string;
-        locations: { name: string };
-      };
-    };
-  };
-  const currentEnrollments: CurrentEnrollment[] = (
-    (myEnrollmentsRaw ?? []) as unknown as MyEnrRaw[]
-  ).map((e) => ({
+  const currentEnrollments: CurrentEnrollment[] = myEnrollmentsRaw.map((e) => ({
     enrollment_id: e.id,
-    weekday: e.time_slots.weekday as EWeekday,
-    start_time: String(e.time_slots.start_time).slice(0, 5),
-    end_time: String(e.time_slots.end_time).slice(0, 5),
-    classroom_id: e.time_slots.classrooms.id,
-    classroom_name: e.time_slots.classrooms.name,
-    classroom_color: e.time_slots.classrooms.color,
-    location_name: e.time_slots.classrooms.locations.name,
+    weekday: e.weekday as EWeekday,
+    start_time: String(e.start_time).slice(0, 5),
+    end_time: String(e.end_time).slice(0, 5),
+    classroom_id: e.classroom_id,
+    classroom_name: e.classroom_name,
+    classroom_color: e.classroom_color ?? "#1E3A8A",
+    location_name: e.location_name,
   }));
 
   // The first (any) enrollment's classroom locks the wizard. If the student
@@ -103,14 +132,8 @@ export default async function EditStudentPage({
     currentEnrollments.length > 0 ? currentEnrollments[0].classroom_id : null;
 
   // 2) Active classrooms with their active slots + capacity counts. This
-  //    drives the classroom -> day -> time wizard.
-  const { data: classroomsRaw } = await supabase
-    .from("classrooms")
-    .select(
-      "id, name, color, default_capacity, status, locations!inner(id, name, status, max_classes_per_student_per_week), time_slots(id, weekday, start_time, end_time, capacity_override, status)"
-    )
-    .eq("status", "active");
-
+  //    drives the classroom -> day -> time wizard. Scoped to this tenant
+  //    through the location join; only active classrooms at active locations.
   type ClassroomRaw = {
     id: string;
     name: string;
@@ -131,8 +154,68 @@ export default async function EditStudentPage({
       status: string;
     }[];
   };
-  const activeClassrooms = ((classroomsRaw ?? []) as unknown as ClassroomRaw[])
-    .filter((c) => c.locations?.status === "active");
+
+  const classroomRows = await db
+    .select({
+      id: classrooms.id,
+      name: classrooms.name,
+      color: classrooms.color,
+      default_capacity: classrooms.defaultCapacity,
+      loc_id: locations.id,
+      loc_name: locations.name,
+      loc_status: locations.status,
+      loc_max: locations.maxClassesPerStudentPerWeek,
+      slot_id: timeSlots.id,
+      slot_weekday: timeSlots.weekday,
+      slot_start_time: timeSlots.startTime,
+      slot_end_time: timeSlots.endTime,
+      slot_capacity_override: timeSlots.capacityOverride,
+      slot_status: timeSlots.status,
+    })
+    .from(classrooms)
+    .innerJoin(locations, eq(locations.id, classrooms.locationId))
+    .leftJoin(timeSlots, eq(timeSlots.classroomId, classrooms.id))
+    .where(
+      and(
+        eq(classrooms.status, "active"),
+        eq(locations.status, "active"),
+        eq(locations.tenantId, user.tenantId!)
+      )
+    );
+
+  // Regroup the flat classroom × slot rows back into the nested shape the
+  // wizard expects.
+  const classroomMap = new Map<string, ClassroomRaw>();
+  for (const r of classroomRows) {
+    let c = classroomMap.get(r.id);
+    if (!c) {
+      c = {
+        id: r.id,
+        name: r.name,
+        color: r.color ?? "#1E3A8A",
+        default_capacity: r.default_capacity,
+        locations: {
+          id: r.loc_id,
+          name: r.loc_name,
+          status: r.loc_status,
+          max_classes_per_student_per_week: r.loc_max,
+        },
+        time_slots: [],
+      };
+      classroomMap.set(r.id, c);
+    }
+    if (r.slot_id) {
+      c.time_slots.push({
+        id: r.slot_id,
+        weekday: r.slot_weekday as string,
+        start_time: String(r.slot_start_time),
+        end_time: String(r.slot_end_time),
+        capacity_override: r.slot_capacity_override,
+        status: r.slot_status as string,
+      });
+    }
+  }
+  const activeClassrooms = Array.from(classroomMap.values());
 
   // Collect slot ids to count enrollments per slot.
   const allSlotIds = activeClassrooms.flatMap((c) =>
@@ -140,13 +223,17 @@ export default async function EditStudentPage({
   );
   const slotCounts = new Map<string, number>();
   if (allSlotIds.length > 0) {
-    const { data: counts } = await supabase
-      .from("enrollments")
-      .select("time_slot_id")
-      .in("time_slot_id", allSlotIds)
-      .or(`effective_to.is.null,effective_to.gt.${today}`);
-    for (const c of counts ?? []) {
-      const id = c.time_slot_id as string;
+    const counts = await db
+      .select({ time_slot_id: enrollments.timeSlotId })
+      .from(enrollments)
+      .where(
+        and(
+          inArray(enrollments.timeSlotId, allSlotIds),
+          or(isNull(enrollments.effectiveTo), gt(enrollments.effectiveTo, today))
+        )
+      );
+    for (const c of counts) {
+      const id = c.time_slot_id;
       slotCounts.set(id, (slotCounts.get(id) ?? 0) + 1);
     }
   }
@@ -230,7 +317,7 @@ export default async function EditStudentPage({
             notify_email: notify.email ?? true,
             notify_whatsapp: notify.whatsapp ?? true,
           }}
-          locations={locations ?? []}
+          locations={locationsList}
         />
       </section>
 

@@ -1,14 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  createSupabaseServerClient,
-  createSupabaseServiceClient,
-} from "@/lib/supabase/server";
+import { desc, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { tenants, brandingAssets, notifications } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
-import { signOutAction } from "@/app/login/actions";
 import { Logo } from "@/app/_components/Logo";
 import { MobileNav } from "@/app/_components/MobileNav";
 import { UserMenu } from "@/app/_components/UserMenu";
+import { SignOutButton } from "@/app/_components/SignOutButton";
 import { SideNav, type SideNavItem } from "@/app/_components/SideNav";
 import {
   NotificationBell,
@@ -54,33 +53,48 @@ export default async function TenantLayout({
     redirect("/login?error=no-tenant");
   }
 
-  const service = createSupabaseServiceClient();
-  const supabase = createSupabaseServerClient();
-  const [
-    { data: tenant },
-    { data: branding },
-    { data: notificationRowsRaw },
-  ] = await Promise.all([
-    service.from("tenants").select("name, status").eq("id", user.tenantId).maybeSingle(),
-    service
-      .from("branding_assets")
-      .select("primary_color_hex")
-      .eq("tenant_id", user.tenantId)
-      .maybeSingle(),
-    // RLS scopes to auth.uid() automatically — safe via user client.
-    supabase
-      .from("notifications")
-      .select("id, type, payload, read_at, created_at")
-      .order("created_at", { ascending: false })
+  // App-level tenant scoping: every query is filtered by the caller's
+  // tenantId / userId resolved from the session (see lib/auth/current-user).
+  const [tenantRows, brandingRows, notificationRowsRaw] = await Promise.all([
+    db
+      .select({ name: tenants.name, status: tenants.status })
+      .from(tenants)
+      .where(eq(tenants.id, user.tenantId))
+      .limit(1),
+    db
+      .select({ primaryColorHex: brandingAssets.primaryColorHex })
+      .from(brandingAssets)
+      .where(eq(brandingAssets.tenantId, user.tenantId))
+      .limit(1),
+    db
+      .select({
+        id: notifications.id,
+        type: notifications.type,
+        payload: notifications.payload,
+        read_at: notifications.readAt,
+        created_at: notifications.createdAt,
+      })
+      .from(notifications)
+      .where(eq(notifications.userId, user.id))
+      .orderBy(desc(notifications.createdAt))
       .limit(20),
   ]);
 
-  const notifications = (notificationRowsRaw ?? []) as NotificationRow[];
+  const tenant = tenantRows[0];
+  const branding = brandingRows[0];
+  // Drizzle returns Date objects / unknown json; NotificationBell wants ISO
+  // strings and a plain object, matching the old PostgREST shape.
+  const notificationItems: NotificationRow[] = notificationRowsRaw.map((n) => ({
+    id: n.id,
+    type: n.type,
+    payload: (n.payload ?? {}) as Record<string, unknown>,
+    read_at: n.read_at ? n.read_at.toISOString() : null,
+    created_at: n.created_at.toISOString(),
+  }));
 
-  const brandColor = branding?.primary_color_hex ?? "#1AA876";
+  const brandColor = branding?.primaryColorHex ?? "#1AA876";
 
   if (tenant?.status === "suspended") {
-    await supabase.auth.signOut();
     redirect("/login?error=tenant-suspended");
   }
 
@@ -98,7 +112,7 @@ export default async function TenantLayout({
           <Logo />
         </Link>
         <div className="flex items-center gap-2">
-          <NotificationBell items={notifications} />
+          <NotificationBell items={notificationItems} />
           <UserMenu
             fullName={user.fullName || ""}
             email={user.email}
@@ -114,14 +128,7 @@ export default async function TenantLayout({
                 {tenant?.name ? (
                   <p className="text-xs text-muted">{tenant.name}</p>
                 ) : null}
-                <form action={signOutAction}>
-                  <button
-                    type="submit"
-                    className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink transition hover:bg-bg"
-                  >
-                    Sign out
-                  </button>
-                </form>
+                <SignOutButton className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink transition hover:bg-bg" />
               </div>
             }
           />
@@ -134,7 +141,7 @@ export default async function TenantLayout({
           <Link href="/tenant" className="shrink-0">
             <Logo />
           </Link>
-          <NotificationBell items={notifications} />
+          <NotificationBell items={notificationItems} />
         </div>
         {tenant?.name ? (
           <div className="px-4 pt-3">

@@ -3,7 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  locations,
+  timeSlots,
+  classrooms,
+  students,
+  enrollments,
+  households,
+  brandingAssets,
+} from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { materializeSessions } from "@/app/tenant/today/actions";
 
@@ -137,16 +147,17 @@ export async function seedDemoDataAction() {
   ensureAdmin(user.role);
   if (!user.tenantId) redirect("/tenant?error=no-tenant");
 
-  const supabase = createSupabaseServerClient();
-
-  // 1. First active location is the demo target.
-  const { data: locations } = await supabase
-    .from("locations")
-    .select("id")
-    .eq("status", "active")
-    .order("created_at", { ascending: true })
+  // 1. First active location is the demo target. Owner connection bypasses
+  // RLS — scope to this tenant in code.
+  const locationRows = await db
+    .select({ id: locations.id })
+    .from(locations)
+    .where(
+      and(eq(locations.tenantId, user.tenantId), eq(locations.status, "active"))
+    )
+    .orderBy(asc(locations.createdAt))
     .limit(1);
-  const location = locations?.[0];
+  const location = locationRows[0];
   if (!location) {
     redirect(
       `/tenant/settings?error=${encodeURIComponent("Create an active location first.")}`
@@ -154,21 +165,22 @@ export async function seedDemoDataAction() {
   }
 
   // 2. Active time slots in any active classroom under that location.
-  const { data: slotsData } = await supabase
-    .from("time_slots")
-    .select(
-      "id, classrooms!inner(status, locations!inner(id, status))"
-    )
-    .eq("status", "active");
-  type SlotRowRaw = {
-    id: string;
-    classrooms: { status: string; locations: { id: string; status: string } };
-  };
-  const eligibleSlots = ((slotsData ?? []) as unknown as SlotRowRaw[]).filter(
+  const slotsData = await db
+    .select({
+      id: timeSlots.id,
+      classroomStatus: classrooms.status,
+      locationId: locations.id,
+      locationStatus: locations.status,
+    })
+    .from(timeSlots)
+    .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+    .innerJoin(locations, eq(locations.id, classrooms.locationId))
+    .where(eq(timeSlots.status, "active"));
+  const eligibleSlots = slotsData.filter(
     (s) =>
-      s.classrooms?.status === "active" &&
-      s.classrooms?.locations?.status === "active" &&
-      s.classrooms.locations.id === location.id
+      s.classroomStatus === "active" &&
+      s.locationStatus === "active" &&
+      s.locationId === location.id
   );
 
   if (eligibleSlots.length === 0) {
@@ -190,31 +202,30 @@ export async function seedDemoDataAction() {
     householdsInserted++;
 
     for (const stu of sample.students) {
-      const { data: student } = await supabase
-        .from("students")
-        .insert({
-          tenant_id: user.tenantId,
-          location_id: location.id,
-          first_name: stu.first_name,
-          last_name: stu.last_name,
-          grade_level: stu.grade_level,
-          lifecycle_status: stu.lifecycle_status,
-          internal_notes: DEMO_TAG,
-          primary_parent_name: sample.primary_parent_name,
-          primary_email: sample.primary_email,
-          primary_phone: sample.primary_phone,
-          secondary_parent_name: sample.secondary_parent_name ?? null,
-          secondary_email: sample.secondary_email ?? null,
-          secondary_phone: sample.secondary_phone ?? null,
-          mailing_address: sample.mailing_address ?? null,
-          notification_prefs_json: {
+      const [student] = await db
+        .insert(students)
+        .values({
+          tenantId: user.tenantId,
+          locationId: location.id,
+          firstName: stu.first_name,
+          lastName: stu.last_name,
+          gradeLevel: stu.grade_level,
+          lifecycleStatus: stu.lifecycle_status,
+          internalNotes: DEMO_TAG,
+          primaryParentName: sample.primary_parent_name,
+          primaryEmail: sample.primary_email,
+          primaryPhone: sample.primary_phone,
+          secondaryParentName: sample.secondary_parent_name ?? null,
+          secondaryEmail: sample.secondary_email ?? null,
+          secondaryPhone: sample.secondary_phone ?? null,
+          mailingAddress: sample.mailing_address ?? null,
+          notificationPrefsJson: {
             email: true,
             whatsapp: true,
             source: DEMO_TAG,
           },
         })
-        .select("id")
-        .single();
+        .returning({ id: students.id });
       if (!student) continue;
       studentsInserted++;
 
@@ -227,12 +238,16 @@ export async function seedDemoDataAction() {
       // Round-robin enroll active + trial students into an existing slot.
       const slot = eligibleSlots[enrollmentsInserted % eligibleSlots.length];
       const today = new Date().toISOString().slice(0, 10);
-      const { error: enrErr } = await supabase.from("enrollments").insert({
-        student_id: student.id,
-        time_slot_id: slot.id,
-        effective_from: today,
-      });
-      if (!enrErr) enrollmentsInserted++;
+      try {
+        await db.insert(enrollments).values({
+          studentId: student.id,
+          timeSlotId: slot.id,
+          effectiveFrom: today,
+        });
+        enrollmentsInserted++;
+      } catch {
+        // ignore — keep seeding the rest
+      }
     }
   }
 
@@ -257,36 +272,44 @@ export async function wipeDemoDataAction() {
   ensureAdmin(user.role);
   if (!user.tenantId) redirect("/tenant?error=no-tenant");
 
-  const supabase = createSupabaseServerClient();
-
   // Only delete rows we tagged as demo. Students cascade-clean enrollments +
   // attendance via FKs. Households tagged with the same marker are removed too.
-  const { data: demoStudents } = await supabase
-    .from("students")
-    .select("id")
-    .eq("tenant_id", user.tenantId)
-    .eq("internal_notes", DEMO_TAG);
+  // Owner connection bypasses RLS — scope to this tenant in code.
+  const demoStudents = await db
+    .select({ id: students.id })
+    .from(students)
+    .where(
+      and(
+        eq(students.tenantId, user.tenantId),
+        eq(students.internalNotes, DEMO_TAG)
+      )
+    );
 
-  const studentIds = (demoStudents ?? []).map((s) => s.id);
+  const studentIds = demoStudents.map((s) => s.id);
   let studentsDeleted = 0;
   if (studentIds.length > 0) {
-    const { error } = await supabase
-      .from("students")
-      .delete()
-      .in("id", studentIds);
-    if (error) {
-      redirect(`/tenant/settings?error=${encodeURIComponent(error.message)}`);
+    try {
+      await db.delete(students).where(inArray(students.id, studentIds));
+    } catch (err) {
+      redirect(
+        `/tenant/settings?error=${encodeURIComponent(
+          err instanceof Error ? err.message : "delete failed"
+        )}`
+      );
     }
     studentsDeleted = studentIds.length;
   }
 
   // Legacy household demo cleanup (kept for any leftover rows from pre-0003 seeds).
-  const { data: demoHouseholds } = await supabase
-    .from("households")
-    .select("id, notification_prefs_json")
-    .eq("tenant_id", user.tenantId);
+  const demoHouseholds = await db
+    .select({
+      id: households.id,
+      notification_prefs_json: households.notificationPrefsJson,
+    })
+    .from(households)
+    .where(eq(households.tenantId, user.tenantId));
 
-  const demoHouseholdIds = (demoHouseholds ?? [])
+  const demoHouseholdIds = demoHouseholds
     .filter((h) => {
       const prefs = (h.notification_prefs_json ?? {}) as Record<string, unknown>;
       return prefs.source === DEMO_TAG;
@@ -295,11 +318,12 @@ export async function wipeDemoDataAction() {
 
   let householdsDeleted = 0;
   if (demoHouseholdIds.length > 0) {
-    const { error } = await supabase
-      .from("households")
-      .delete()
-      .in("id", demoHouseholdIds);
-    if (!error) householdsDeleted = demoHouseholdIds.length;
+    try {
+      await db.delete(households).where(inArray(households.id, demoHouseholdIds));
+      householdsDeleted = demoHouseholdIds.length;
+    } catch {
+      // ignore — best-effort legacy cleanup
+    }
   }
 
   revalidatePath("/tenant/households");
@@ -349,14 +373,30 @@ export async function saveBrandingAction(
     return { error: parsed.error.issues[0]?.message ?? "Invalid input.", success: false };
   }
 
-  const supabase = createSupabaseServerClient();
-  const { error } = await supabase
-    .from("branding_assets")
-    .upsert(
-      { tenant_id: user.tenantId, ...parsed.data },
-      { onConflict: "tenant_id" }
-    );
-  if (error) return { error: error.message, success: false };
+  const { primary_color_hex, logo_url, sender_display_name } = parsed.data;
+  try {
+    await db
+      .insert(brandingAssets)
+      .values({
+        tenantId: user.tenantId,
+        primaryColorHex: primary_color_hex,
+        logoUrl: logo_url,
+        senderDisplayName: sender_display_name,
+      })
+      .onConflictDoUpdate({
+        target: brandingAssets.tenantId,
+        set: {
+          primaryColorHex: primary_color_hex,
+          logoUrl: logo_url,
+          senderDisplayName: sender_display_name,
+        },
+      });
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Update failed.",
+      success: false,
+    };
+  }
 
   revalidatePath("/tenant/settings");
   revalidatePath("/tenant");
@@ -368,15 +408,15 @@ export async function wipeAllTenantDataAction() {
   ensureAdmin(user.role);
   if (!user.tenantId) redirect("/tenant?error=no-tenant");
 
-  const supabase = createSupabaseServerClient();
   // Delete in FK-friendly order. Households + students + locations are all
   // tenant-scoped — deleting them cascades through enrollments, sessions, etc.
   // Locations stay (the tenant probably wants to keep their setup).
+  // Owner connection bypasses RLS — scope to this tenant in code.
 
   // 1. Students -> cascades to enrollments + attendance
-  await supabase.from("students").delete().eq("tenant_id", user.tenantId);
+  await db.delete(students).where(eq(students.tenantId, user.tenantId));
   // 2. Households (now safe since students are gone)
-  await supabase.from("households").delete().eq("tenant_id", user.tenantId);
+  await db.delete(households).where(eq(households.tenantId, user.tenantId));
   // 3. Sessions don't have tenant_id directly; cleanup via time_slots is
   //    cascade-on-delete-of-slot. Leave time slots alone (still useful config).
   //    But we can wipe stranded sessions older than today to clean up.

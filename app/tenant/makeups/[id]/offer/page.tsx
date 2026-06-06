@@ -1,7 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { and, eq, ne, gte, lte, inArray, asc } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  attendanceRecords,
+  sessions,
+  timeSlots,
+  classrooms,
+  locations,
+  students,
+} from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { formatTimeInTimezone } from "@/lib/time";
 import { StudentAvatar } from "@/app/_components/StudentAvatar";
@@ -17,131 +26,148 @@ export default async function OfferMakeupPage({
   params: { id: string };
   searchParams: { error?: string };
 }) {
-  await getCurrentUserOrRedirect();
-  const supabase = createSupabaseServerClient();
+  const user = await getCurrentUserOrRedirect();
 
-  // 1. Absent attendance row. Defensive select — omits is_makeup so the
-  //    query stays valid even if the column migration hasn't been applied.
-  const { data: absent } = await supabase
-    .from("attendance_records")
-    .select("id, status, session_id, student_id")
-    .eq("id", params.id)
-    .maybeSingle();
+  // 1. Absent attendance row joined through to its location so we can both
+  //    enforce tenant isolation in code and anchor the picker on the original
+  //    session/classroom. Join on session_id (the enrolled session) —
+  //    see [[attendance-sessions-embed]].
+  const [absent] = await db
+    .select({
+      id: attendanceRecords.id,
+      status: attendanceRecords.status,
+      sessionId: attendanceRecords.sessionId,
+      studentId: attendanceRecords.studentId,
+      sessionStartUtc: sessions.scheduledStartUtc,
+      sessionEndUtc: sessions.scheduledEndUtc,
+      classroomId: classrooms.id,
+      classroomName: classrooms.name,
+      classroomColor: classrooms.color,
+      classroomDefaultCapacity: classrooms.defaultCapacity,
+      locationName: locations.name,
+      tz: locations.ianaTimezone,
+    })
+    .from(attendanceRecords)
+    .innerJoin(sessions, eq(sessions.id, attendanceRecords.sessionId))
+    .innerJoin(timeSlots, eq(timeSlots.id, sessions.timeSlotId))
+    .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+    .innerJoin(locations, eq(locations.id, classrooms.locationId))
+    .where(
+      and(
+        eq(attendanceRecords.id, params.id),
+        eq(locations.tenantId, user.tenantId!)
+      )
+    )
+    .limit(1);
   if (!absent) notFound();
 
-  // 2. Original session + slot + classroom + location to anchor the picker.
-  const { data: session } = await supabase
-    .from("sessions")
-    .select("id, scheduled_start_utc, scheduled_end_utc, time_slot_id")
-    .eq("id", absent.session_id as string)
-    .maybeSingle();
-  if (!session) notFound();
-
-  const { data: slot } = await supabase
-    .from("time_slots")
-    .select("classroom_id")
-    .eq("id", session.time_slot_id as string)
-    .maybeSingle();
-  if (!slot) notFound();
-
-  const { data: classroom } = await supabase
-    .from("classrooms")
-    .select("id, name, color, default_capacity, location_id")
-    .eq("id", slot.classroom_id as string)
-    .maybeSingle();
-  if (!classroom) notFound();
-
-  const { data: location } = await supabase
-    .from("locations")
-    .select("name, iana_timezone")
-    .eq("id", classroom.location_id as string)
-    .maybeSingle();
-
-  const { data: student } = await supabase
-    .from("students")
-    .select("first_name, last_name")
-    .eq("id", absent.student_id as string)
-    .maybeSingle();
+  const [student] = await db
+    .select({
+      firstName: students.firstName,
+      lastName: students.lastName,
+    })
+    .from(students)
+    .where(eq(students.id, absent.studentId))
+    .limit(1);
 
   // 3. All time slots for that classroom, then upcoming sessions for the next 30 days.
-  const { data: classroomSlots } = await supabase
-    .from("time_slots")
-    .select("id, capacity_override")
-    .eq("classroom_id", classroom.id)
-    .eq("status", "active");
-  const slotIds = (classroomSlots ?? []).map((s) => s.id as string);
-  const capByTimeSlot = new Map<string, number | null>();
-  for (const s of classroomSlots ?? []) {
-    capByTimeSlot.set(
-      s.id as string,
-      (s.capacity_override as number | null) ?? null
+  const classroomSlots = await db
+    .select({
+      id: timeSlots.id,
+      capacityOverride: timeSlots.capacityOverride,
+    })
+    .from(timeSlots)
+    .where(
+      and(
+        eq(timeSlots.classroomId, absent.classroomId),
+        eq(timeSlots.status, "active")
+      )
     );
+  const slotIds = classroomSlots.map((s) => s.id);
+  const capByTimeSlot = new Map<string, number | null>();
+  for (const s of classroomSlots) {
+    capByTimeSlot.set(s.id, s.capacityOverride ?? null);
   }
 
-  const now = new Date().toISOString();
+  const now = new Date();
   const horizonDays = 30;
-  const horizon = new Date(
-    Date.now() + horizonDays * 24 * 60 * 60 * 1000
-  ).toISOString();
+  const horizon = new Date(Date.now() + horizonDays * 24 * 60 * 60 * 1000);
 
-  const { data: upcomingSessions } = await supabase
-    .from("sessions")
-    .select(
-      "id, scheduled_start_utc, scheduled_end_utc, time_slot_id, status"
+  const upcomingSessions = await db
+    .select({
+      id: sessions.id,
+      scheduledStartUtc: sessions.scheduledStartUtc,
+      scheduledEndUtc: sessions.scheduledEndUtc,
+      timeSlotId: sessions.timeSlotId,
+      status: sessions.status,
+    })
+    .from(sessions)
+    .where(
+      and(
+        inArray(
+          sessions.timeSlotId,
+          slotIds.length > 0
+            ? slotIds
+            : ["00000000-0000-0000-0000-000000000000"]
+        ),
+        gte(sessions.scheduledStartUtc, now),
+        lte(sessions.scheduledStartUtc, horizon),
+        ne(sessions.status, "cancelled")
+      )
     )
-    .in("time_slot_id", slotIds.length > 0 ? slotIds : ["00000000-0000-0000-0000-000000000000"])
-    .gte("scheduled_start_utc", now)
-    .lte("scheduled_start_utc", horizon)
-    .neq("status", "cancelled")
-    .order("scheduled_start_utc", { ascending: true });
+    .orderBy(asc(sessions.scheduledStartUtc));
 
-  const sessionIds = (upcomingSessions ?? []).map((s) => s.id as string);
+  const sessionIds = upcomingSessions.map((s) => s.id);
 
   // 4. Count enrollments per session and check whether this student is already in any.
-  const { data: attendanceData } =
+  const attendanceData =
     sessionIds.length > 0
-      ? await supabase
-          .from("attendance_records")
-          .select("session_id, student_id, status")
-          .in("session_id", sessionIds)
-      : { data: [] };
+      ? await db
+          .select({
+            sessionId: attendanceRecords.sessionId,
+            studentId: attendanceRecords.studentId,
+            status: attendanceRecords.status,
+          })
+          .from(attendanceRecords)
+          .where(inArray(attendanceRecords.sessionId, sessionIds))
+      : [];
 
   const enrolledBySession = new Map<string, number>();
   const studentAlreadyIn = new Set<string>();
-  for (const a of attendanceData ?? []) {
-    const sid = a.session_id as string;
+  for (const a of attendanceData) {
+    const sid = a.sessionId;
     if (a.status !== "absent" && a.status !== "excused") {
       enrolledBySession.set(sid, (enrolledBySession.get(sid) ?? 0) + 1);
     }
-    if (a.student_id === absent.student_id) studentAlreadyIn.add(sid);
+    if (a.studentId === absent.studentId) studentAlreadyIn.add(sid);
   }
 
-  const tz = location?.iana_timezone ?? "UTC";
+  const tz = absent.tz ?? "UTC";
 
-  const sessionOptions: SessionOption[] = (upcomingSessions ?? []).map((s) => {
+  const sessionOptions: SessionOption[] = upcomingSessions.map((s) => {
     const cap =
-      capByTimeSlot.get(s.time_slot_id as string) ?? classroom.default_capacity;
-    const enrolled = enrolledBySession.get(s.id as string) ?? 0;
+      capByTimeSlot.get(s.timeSlotId) ?? absent.classroomDefaultCapacity;
+    const enrolled = enrolledBySession.get(s.id) ?? 0;
     return {
-      id: s.id as string,
-      startUtc: s.scheduled_start_utc as string,
-      endUtc: s.scheduled_end_utc as string,
+      id: s.id,
+      startUtc: s.scheduledStartUtc.toISOString(),
+      endUtc: s.scheduledEndUtc.toISOString(),
       tz,
       capacity: cap,
       enrolled,
-      isStudentIn: studentAlreadyIn.has(s.id as string),
+      isStudentIn: studentAlreadyIn.has(s.id),
     };
   });
 
   const studentName =
-    `${student?.first_name ?? ""} ${student?.last_name ?? ""}`.trim() ||
+    `${student?.firstName ?? ""} ${student?.lastName ?? ""}`.trim() ||
     "this student";
   const originalDateLabel = new Intl.DateTimeFormat("en-US", {
     timeZone: tz,
     weekday: "short",
     month: "short",
     day: "numeric",
-  }).format(new Date(session.scheduled_start_utc as string));
+  }).format(absent.sessionStartUtc);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -156,7 +182,7 @@ export default async function OfferMakeupPage({
       <div>
         <h1 className="text-2xl font-semibold text-ink">Offer make-up class</h1>
         <p className="mt-1 text-sm text-muted">
-          Pick one or more upcoming sessions in {classroom.name}. Each pick adds
+          Pick one or more upcoming sessions in {absent.classroomName}. Each pick adds
           the student to that session as a make-up.
         </p>
       </div>
@@ -169,16 +195,16 @@ export default async function OfferMakeupPage({
             <p className="text-xs text-muted">
               Missed {originalDateLabel} ·{" "}
               {formatTimeInTimezone(
-                session.scheduled_start_utc as string,
+                absent.sessionStartUtc.toISOString(),
                 tz
               )}
               –
               {formatTimeInTimezone(
-                session.scheduled_end_utc as string,
+                absent.sessionEndUtc.toISOString(),
                 tz
               )}{" "}
-              · {classroom.name}
-              {location?.name ? ` · ${location.name}` : ""}
+              · {absent.classroomName}
+              {absent.locationName ? ` · ${absent.locationName}` : ""}
             </p>
           </div>
         </div>
@@ -192,13 +218,13 @@ export default async function OfferMakeupPage({
 
       {sessionOptions.length === 0 ? (
         <div className="rounded-md border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-ink">
-          No upcoming sessions in {classroom.name} for the next {horizonDays} days.
+          No upcoming sessions in {absent.classroomName} for the next {horizonDays} days.
           Add more time slots to the classroom (or wait for the schedule to roll
           forward).
         </div>
       ) : (
         <MakeupOfferForm
-          attendanceId={absent.id as string}
+          attendanceId={absent.id}
           studentName={studentName}
           tz={tz}
           sessions={sessionOptions}

@@ -1,24 +1,43 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
-import { signInAction, type LoginState } from "./actions";
-
-const initialState: LoginState = { error: null };
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <button type="submit" disabled={pending} className="btn-primary w-full py-2.5">
-      {pending ? "Signing in…" : "Sign in"}
-    </button>
-  );
-}
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { authClient } from "@/lib/auth/client";
+import { resolvePostLoginPath } from "./actions";
 
 export function LoginForm() {
-  const [state, formAction] = useFormState(signInAction, initialState);
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setPending(true);
+
+    const form = new FormData(e.currentTarget);
+    const email = String(form.get("email") ?? "");
+    const password = String(form.get("password") ?? "");
+
+    const { error: signInError } = await authClient.signIn.email({
+      email,
+      password,
+    });
+
+    if (signInError) {
+      setError("Sign-in failed. Check your email and password.");
+      setPending(false);
+      return;
+    }
+
+    // Cookie is now set in the browser; the server action can read the session.
+    const target = await resolvePostLoginPath();
+    router.push(target);
+    router.refresh();
+  }
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label htmlFor="email" className="block text-sm font-medium text-ink">
           Email
@@ -47,13 +66,19 @@ export function LoginForm() {
         />
       </div>
 
-      {state.error ? (
+      {error ? (
         <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
-          {state.error}
+          {error}
         </p>
       ) : null}
 
-      <SubmitButton />
+      <button
+        type="submit"
+        disabled={pending}
+        className="btn-primary w-full py-2.5"
+      >
+        {pending ? "Signing in…" : "Sign in"}
+      </button>
     </form>
   );
 }

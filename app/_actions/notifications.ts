@@ -1,36 +1,40 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { and, eq, isNull } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { notifications } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 
-// User actions — both pass auth.uid() through RLS, so they're safe to
-// expose. The RLS policy on notifications already restricts to own rows.
+// User actions, scoped in app code to the caller's own rows (replaces the
+// old notifications RLS policy on user_id = auth.uid()).
 
 export async function markNotificationReadAction(formData: FormData) {
   const user = await getCurrentUserOrRedirect();
   const id = formData.get("id");
   if (typeof id !== "string" || !id) return;
 
-  const supabase = createSupabaseServerClient();
-  await supabase
-    .from("notifications")
-    .update({ read_at: new Date().toISOString() })
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .is("read_at", null);
+  await db
+    .update(notifications)
+    .set({ readAt: new Date() })
+    .where(
+      and(
+        eq(notifications.id, id),
+        eq(notifications.userId, user.id),
+        isNull(notifications.readAt)
+      )
+    );
 
   revalidatePath("/tenant", "layout");
 }
 
 export async function markAllNotificationsReadAction() {
   const user = await getCurrentUserOrRedirect();
-  const supabase = createSupabaseServerClient();
-  await supabase
-    .from("notifications")
-    .update({ read_at: new Date().toISOString() })
-    .eq("user_id", user.id)
-    .is("read_at", null);
+
+  await db
+    .update(notifications)
+    .set({ readAt: new Date() })
+    .where(and(eq(notifications.userId, user.id), isNull(notifications.readAt)));
 
   revalidatePath("/tenant", "layout");
 }

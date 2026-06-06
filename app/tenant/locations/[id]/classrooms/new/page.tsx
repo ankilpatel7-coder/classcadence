@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { locations } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { CreateClassroomForm } from "./CreateClassroomForm";
 
@@ -24,12 +26,15 @@ export default async function NewClassroomPage({
   }
 
   // Confirm the location exists + belongs to this tenant.
-  const supabase = createSupabaseServerClient();
-  const { data: location } = await supabase
-    .from("locations")
-    .select("id, name")
-    .eq("id", params.id)
-    .maybeSingle();
+  const [location] = await db
+    .select({ id: locations.id, name: locations.name })
+    .from(locations)
+    .where(
+      user.tenantId
+        ? and(eq(locations.id, params.id), eq(locations.tenantId, user.tenantId))
+        : eq(locations.id, params.id)
+    )
+    .limit(1);
   if (!location) notFound();
 
   return (
