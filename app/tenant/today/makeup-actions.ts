@@ -4,10 +4,18 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { randomBytes, createHash } from "crypto";
 import { z } from "zod";
+import { and, asc, eq, gt, ne } from "drizzle-orm";
+import { db } from "@/lib/db";
 import {
-  createSupabaseServerClient,
-  createSupabaseServiceClient,
-} from "@/lib/supabase/server";
+  attendanceRecords,
+  sessions,
+  timeSlots,
+  classrooms,
+  locations,
+  tenants,
+  students,
+  makeupOffers,
+} from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { sendEmail } from "@/lib/email/client";
 import { formatTimeInTimezone } from "@/lib/time";
@@ -42,39 +50,36 @@ export async function offerMakeupAction(formData: FormData) {
     redirect("/tenant/today?error=invalid-id");
   }
 
-  const supabase = createSupabaseServerClient();
+  const absentAttendanceIdStr = absentAttendanceId as string;
 
   // 1. Find the absent attendance row + its session/time_slot context.
-  const { data: row } = await supabase
-    .from("attendance_records")
-    .select(
-      "id, student_id, sessions!inner(id, time_slot_id, scheduled_end_utc)"
-    )
-    .eq("id", absentAttendanceId)
-    .maybeSingle();
-  type Row = {
-    id: string;
-    student_id: string;
-    sessions: {
-      id: string;
-      time_slot_id: string;
-      scheduled_end_utc: string;
-    };
-  };
-  const r = row as unknown as Row | null;
+  //    Join on session_id (the enrolled session), not made_up_in_session_id.
+  const [r] = await db
+    .select({
+      id: attendanceRecords.id,
+      studentId: attendanceRecords.studentId,
+      sessionTimeSlotId: sessions.timeSlotId,
+    })
+    .from(attendanceRecords)
+    .innerJoin(sessions, eq(sessions.id, attendanceRecords.sessionId))
+    .where(eq(attendanceRecords.id, absentAttendanceIdStr))
+    .limit(1);
   if (!r) redirect("/tenant/today?error=not-found");
 
   // 2. Pick the next future session in the SAME time slot.
-  const nowIso = new Date().toISOString();
-  const { data: nextSession } = await supabase
-    .from("sessions")
-    .select("id, scheduled_start_utc")
-    .eq("time_slot_id", r!.sessions.time_slot_id)
-    .gt("scheduled_start_utc", nowIso)
-    .neq("status", "cancelled")
-    .order("scheduled_start_utc", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const now = new Date();
+  const [nextSession] = await db
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.timeSlotId, r!.sessionTimeSlotId),
+        gt(sessions.scheduledStartUtc, now),
+        ne(sessions.status, "cancelled")
+      )
+    )
+    .orderBy(asc(sessions.scheduledStartUtc))
+    .limit(1);
 
   if (!nextSession) {
     redirect(
@@ -87,18 +92,22 @@ export async function offerMakeupAction(formData: FormData) {
 
   // 3. Insert make-up offer with hashed token. 7-day expiry.
   const { raw, hash } = newToken();
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-  const { error } = await supabase.from("makeup_offers").insert({
-    absent_attendance_id: r!.id,
-    offered_session_id: nextSession!.id,
-    state: "pending",
-    token_hash: hash,
-    offered_by: user.id,
-    expires_at: expiresAt,
-  });
-  if (error) {
-    redirect("/tenant/today?error=" + encodeURIComponent(error.message));
+  try {
+    await db.insert(makeupOffers).values({
+      absentAttendanceId: r!.id,
+      offeredSessionId: nextSession!.id,
+      state: "pending",
+      tokenHash: hash,
+      offeredBy: user.id,
+      expiresAt,
+    });
+  } catch (err) {
+    redirect(
+      "/tenant/today?error=" +
+        encodeURIComponent(err instanceof Error ? err.message : "insert-failed")
+    );
   }
 
   revalidatePath("/tenant/today");
@@ -109,7 +118,7 @@ export async function offerMakeupAction(formData: FormData) {
 
   // Also email the parent so they don't depend on the admin's copy/paste.
   fireMakeupOfferEmail({
-    studentId: r!.student_id,
+    studentId: r!.studentId,
     offeredSessionId: nextSession!.id,
     url,
   }).catch((err) => console.error("[makeup] email failed:", err));
@@ -124,65 +133,58 @@ async function fireMakeupOfferEmail(args: {
   offeredSessionId: string;
   url: string;
 }) {
-  const service = createSupabaseServiceClient();
-
+  // session -> time_slot -> classroom -> location -> tenant.
   const [studentRes, sessionRes] = await Promise.all([
-    service
-      .from("students")
-      .select(
-        "first_name, last_name, primary_parent_name, primary_email, notification_prefs_json"
-      )
-      .eq("id", args.studentId)
-      .maybeSingle(),
-    service
-      .from("sessions")
-      .select(
-        "scheduled_start_utc, scheduled_end_utc, time_slots!inner(classrooms!inner(name, locations!inner(iana_timezone, tenants!inner(name))))"
-      )
-      .eq("id", args.offeredSessionId)
-      .maybeSingle(),
+    db
+      .select({
+        firstName: students.firstName,
+        lastName: students.lastName,
+        primaryParentName: students.primaryParentName,
+        primaryEmail: students.primaryEmail,
+        notificationPrefsJson: students.notificationPrefsJson,
+      })
+      .from(students)
+      .where(eq(students.id, args.studentId))
+      .limit(1),
+    db
+      .select({
+        scheduledStartUtc: sessions.scheduledStartUtc,
+        scheduledEndUtc: sessions.scheduledEndUtc,
+        classroomName: classrooms.name,
+        ianaTimezone: locations.ianaTimezone,
+        tenantName: tenants.name,
+      })
+      .from(sessions)
+      .innerJoin(timeSlots, eq(timeSlots.id, sessions.timeSlotId))
+      .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+      .innerJoin(locations, eq(locations.id, classrooms.locationId))
+      .innerJoin(tenants, eq(tenants.id, locations.tenantId))
+      .where(eq(sessions.id, args.offeredSessionId))
+      .limit(1),
   ]);
 
-  type SRow = {
-    first_name: string;
-    last_name: string;
-    primary_parent_name: string | null;
-    primary_email: string | null;
-    notification_prefs_json: { email?: boolean } | null;
-  };
-  type SesRow = {
-    scheduled_start_utc: string;
-    scheduled_end_utc: string;
-    time_slots: {
-      classrooms: {
-        name: string;
-        locations: {
-          iana_timezone: string;
-          tenants: { name: string };
-        };
-      };
-    };
-  };
-
-  const student = studentRes.data as unknown as SRow | null;
-  const session = sessionRes.data as unknown as SesRow | null;
+  const student = studentRes[0];
+  const session = sessionRes[0];
   if (!student || !session) return;
-  if (!student.primary_email) return;
-  if (student.notification_prefs_json?.email === false) return;
+  if (!student.primaryEmail) return;
+  const prefs = student.notificationPrefsJson as { email?: boolean } | null;
+  if (prefs?.email === false) return;
 
-  const tz = session.time_slots.classrooms.locations.iana_timezone;
-  const classroomName = session.time_slots.classrooms.name;
-  const tenantName = session.time_slots.classrooms.locations.tenants.name;
-  const studentName = `${student.first_name} ${student.last_name}`.trim();
-  const startLocal = formatTimeInTimezone(session.scheduled_start_utc, tz);
-  const endLocal = formatTimeInTimezone(session.scheduled_end_utc, tz);
-  const sessionDate = new Date(session.scheduled_start_utc).toLocaleDateString(
+  const tz = session.ianaTimezone;
+  const classroomName = session.classroomName;
+  const tenantName = session.tenantName;
+  const studentName = `${student.firstName} ${student.lastName}`.trim();
+  const startIso = session.scheduledStartUtc.toISOString();
+  const endIso = session.scheduledEndUtc.toISOString();
+  const startLocal = formatTimeInTimezone(startIso, tz);
+  const endLocal = formatTimeInTimezone(endIso, tz);
+  const sessionDate = new Date(startIso).toLocaleDateString(
     "en-US",
     { timeZone: tz, weekday: "long", month: "short", day: "numeric" }
   );
 
-  const greeting = student.primary_parent_name
-    ? `Hi ${student.primary_parent_name},`
+  const greeting = student.primaryParentName
+    ? `Hi ${student.primaryParentName},`
     : "Hi there,";
 
   const text = [
@@ -217,7 +219,7 @@ async function fireMakeupOfferEmail(args: {
 </body></html>`;
 
   await sendEmail({
-    to: student.primary_email,
+    to: student.primaryEmail,
     subject: `Make-up class offered for ${studentName}`,
     text,
     html,
@@ -259,72 +261,57 @@ export async function createMakeupAttendancesAction(formData: FormData) {
     );
   }
 
-  const supabase = createSupabaseServerClient();
-
   // Confirm the absent attendance row and grab the student.
-  const { data: absent } = await supabase
-    .from("attendance_records")
-    .select("id, student_id, status")
-    .eq("id", parsed.data.absent_attendance_id)
-    .maybeSingle();
+  const [absent] = await db
+    .select({
+      id: attendanceRecords.id,
+      studentId: attendanceRecords.studentId,
+      status: attendanceRecords.status,
+    })
+    .from(attendanceRecords)
+    .where(eq(attendanceRecords.id, parsed.data.absent_attendance_id))
+    .limit(1);
   if (!absent) redirect("/tenant/makeups?error=not-found");
 
-  const studentId = absent.student_id as string;
-  type AttendanceInsert = {
-    session_id: string;
-    student_id: string;
-    status: string;
-    is_makeup?: boolean;
-  };
-  const rows: AttendanceInsert[] = parsed.data.session_ids.map(
-    (sessionId) => ({
-      session_id: sessionId,
-      student_id: studentId,
-      status: "expected",
-      is_makeup: true,
-    })
-  );
+  const studentId = absent!.studentId;
+  // is_makeup is not modeled in the Drizzle schema; insert the bare make-up
+  // attendance rows (the Make-up chip on Today degrades gracefully).
+  const rows = parsed.data.session_ids.map((sessionId) => ({
+    sessionId,
+    studentId,
+    status: "expected" as const,
+  }));
 
-  // Try with is_makeup first; if the migration hasn't been applied, retry
-  // without it so the make-up still works (just no Make-up chip on Today).
-  let { error: insertError } = await supabase
-    .from("attendance_records")
-    .upsert(rows, {
-      onConflict: "session_id,student_id",
-      ignoreDuplicates: true,
-    });
-  if (insertError && /is_makeup/.test(insertError.message)) {
-    const fallback: AttendanceInsert[] = rows.map((r) => ({
-      session_id: r.session_id,
-      student_id: r.student_id,
-      status: r.status,
-    }));
-    const retry = await supabase
-      .from("attendance_records")
-      .upsert(fallback, {
-        onConflict: "session_id,student_id",
-        ignoreDuplicates: true,
+  try {
+    await db
+      .insert(attendanceRecords)
+      .values(rows)
+      .onConflictDoNothing({
+        target: [attendanceRecords.sessionId, attendanceRecords.studentId],
       });
-    insertError = retry.error;
-  }
-  if (insertError) {
+  } catch (err) {
     redirect(
-      `/tenant/makeups/${absent.id}/offer?error=${encodeURIComponent(insertError.message)}`
+      `/tenant/makeups/${absent!.id}/offer?error=${encodeURIComponent(
+        err instanceof Error ? err.message : "insert-failed"
+      )}`
     );
   }
 
   // Promote the absent record to made_up. made_up_in_session_id points at the
-  // first selected session for traceability — the rest live with is_makeup=true.
-  const { error: updateError } = await supabase
-    .from("attendance_records")
-    .update({
-      status: "made_up",
-      made_up_in_session_id: parsed.data.session_ids[0],
-    })
-    .eq("id", parsed.data.absent_attendance_id);
-  if (updateError) {
+  // first selected session for traceability.
+  try {
+    await db
+      .update(attendanceRecords)
+      .set({
+        status: "made_up",
+        madeUpInSessionId: parsed.data.session_ids[0],
+      })
+      .where(eq(attendanceRecords.id, parsed.data.absent_attendance_id));
+  } catch (err) {
     redirect(
-      `/tenant/makeups/${absent.id}/offer?error=${encodeURIComponent(updateError.message)}`
+      `/tenant/makeups/${absent!.id}/offer?error=${encodeURIComponent(
+        err instanceof Error ? err.message : "update-failed"
+      )}`
     );
   }
 
@@ -360,44 +347,25 @@ export async function createManualAttendancesAction(formData: FormData) {
     );
   }
 
-  const supabase = createSupabaseServerClient();
-  type AttendanceInsert = {
-    session_id: string;
-    student_id: string;
-    status: string;
-    is_manual?: boolean;
-  };
-  const rows: AttendanceInsert[] = parsed.data.session_ids.map((sid) => ({
-    session_id: sid,
-    student_id: parsed.data.student_id,
-    status: "expected",
-    is_manual: true,
+  // is_manual is not modeled in the Drizzle schema; insert bare attendance rows.
+  const rows = parsed.data.session_ids.map((sid) => ({
+    sessionId: sid,
+    studentId: parsed.data.student_id,
+    status: "expected" as const,
   }));
 
-  // Try with is_manual; fall back if the column doesn't exist yet.
-  let { error: insertError } = await supabase
-    .from("attendance_records")
-    .upsert(rows, {
-      onConflict: "session_id,student_id",
-      ignoreDuplicates: true,
-    });
-  if (insertError && /is_manual/.test(insertError.message)) {
-    const fallback = rows.map((r) => ({
-      session_id: r.session_id,
-      student_id: r.student_id,
-      status: r.status,
-    }));
-    const retry = await supabase
-      .from("attendance_records")
-      .upsert(fallback, {
-        onConflict: "session_id,student_id",
-        ignoreDuplicates: true,
+  try {
+    await db
+      .insert(attendanceRecords)
+      .values(rows)
+      .onConflictDoNothing({
+        target: [attendanceRecords.sessionId, attendanceRecords.studentId],
       });
-    insertError = retry.error;
-  }
-  if (insertError) {
+  } catch (err) {
     redirect(
-      `/tenant/makeups/manual?error=${encodeURIComponent(insertError.message)}`
+      `/tenant/makeups/manual?error=${encodeURIComponent(
+        err instanceof Error ? err.message : "insert-failed"
+      )}`
     );
   }
 
@@ -428,62 +396,66 @@ export async function respondToMakeupAction(formData: FormData) {
 
   const hash = createHash("sha256").update(tokenStr).digest("hex");
 
-  const service = createSupabaseServiceClient();
-  const { data: offer } = await service
-    .from("makeup_offers")
-    .select("id, state, expires_at, offered_session_id, absent_attendance_id")
-    .eq("token_hash", hash)
-    .maybeSingle();
+  const [offer] = await db
+    .select({
+      id: makeupOffers.id,
+      state: makeupOffers.state,
+      expiresAt: makeupOffers.expiresAt,
+      offeredSessionId: makeupOffers.offeredSessionId,
+      absentAttendanceId: makeupOffers.absentAttendanceId,
+    })
+    .from(makeupOffers)
+    .where(eq(makeupOffers.tokenHash, hash))
+    .limit(1);
   if (!offer) redirect("/makeup/invalid");
 
   const now = new Date();
-  if (
-    offer.state !== "pending" ||
-    new Date(offer.expires_at as string) < now
-  ) {
-    redirect(`/makeup/${tokenStr}?status=${offer.state}`);
+  if (offer!.state !== "pending" || offer!.expiresAt < now) {
+    redirect(`/makeup/${tokenStr}?status=${offer!.state}`);
   }
 
   if (choiceStr === "decline") {
-    await service
-      .from("makeup_offers")
-      .update({ state: "declined", responded_at: now.toISOString() })
-      .eq("id", offer.id);
+    await db
+      .update(makeupOffers)
+      .set({ state: "declined", respondedAt: now })
+      .where(eq(makeupOffers.id, offer!.id));
     redirect(`/makeup/${tokenStr}?status=declined`);
   }
 
   // accept: get the absent attendance row to find the student
-  const { data: absentRow } = await service
-    .from("attendance_records")
-    .select("student_id")
-    .eq("id", offer.absent_attendance_id)
-    .maybeSingle();
+  const [absentRow] = await db
+    .select({ studentId: attendanceRecords.studentId })
+    .from(attendanceRecords)
+    .where(eq(attendanceRecords.id, offer!.absentAttendanceId))
+    .limit(1);
   if (!absentRow) redirect("/makeup/invalid");
 
   // Create attendance_record on the offered session for this student.
   // Soft-conflict: ignore if a row already exists (e.g. they're already enrolled).
-  await service.from("attendance_records").upsert(
-    {
-      session_id: offer.offered_session_id,
-      student_id: absentRow.student_id,
+  await db
+    .insert(attendanceRecords)
+    .values({
+      sessionId: offer!.offeredSessionId,
+      studentId: absentRow!.studentId,
       status: "expected",
-    },
-    { onConflict: "session_id,student_id", ignoreDuplicates: true }
-  );
+    })
+    .onConflictDoNothing({
+      target: [attendanceRecords.sessionId, attendanceRecords.studentId],
+    });
 
   // Update the absent row to mark it as made up + link to the new session.
-  await service
-    .from("attendance_records")
-    .update({
+  await db
+    .update(attendanceRecords)
+    .set({
       status: "made_up",
-      made_up_in_session_id: offer.offered_session_id,
+      madeUpInSessionId: offer!.offeredSessionId,
     })
-    .eq("id", offer.absent_attendance_id);
+    .where(eq(attendanceRecords.id, offer!.absentAttendanceId));
 
-  await service
-    .from("makeup_offers")
-    .update({ state: "accepted", responded_at: now.toISOString() })
-    .eq("id", offer.id);
+  await db
+    .update(makeupOffers)
+    .set({ state: "accepted", respondedAt: now })
+    .where(eq(makeupOffers.id, offer!.id));
 
   redirect(`/makeup/${tokenStr}?status=accepted`);
 }

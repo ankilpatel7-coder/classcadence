@@ -3,10 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { and, eq, gt, gte, inArray, isNull, or } from "drizzle-orm";
+import { db } from "@/lib/db";
 import {
-  createSupabaseServerClient,
-  createSupabaseServiceClient,
-} from "@/lib/supabase/server";
+  students,
+  enrollments,
+  timeSlots,
+  classrooms,
+  locations,
+  sessions,
+  attendanceRecords,
+  tenants,
+} from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { materializeSessions } from "@/app/tenant/today/actions";
 import {
@@ -110,23 +118,41 @@ export async function createStudentAction(
   }
 
   const { notify_email, notify_whatsapp, ...rest } = parsed.data;
-  const supabase = createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("students")
-    .insert({
-      ...rest,
-      tenant_id: user.tenantId,
-      notification_prefs_json: notifyPrefsFrom(notify_email, notify_whatsapp),
-    })
-    .select("id")
-    .single();
 
-  if (error || !data) {
-    return { error: error?.message ?? "Insert failed.", fieldErrors: {} };
+  let insertedId: string;
+  try {
+    const [row] = await db
+      .insert(students)
+      .values({
+        locationId: rest.location_id,
+        firstName: rest.first_name,
+        lastName: rest.last_name,
+        dob: rest.dob,
+        gradeLevel: rest.grade_level,
+        lifecycleStatus: rest.lifecycle_status,
+        internalNotes: rest.internal_notes,
+        primaryParentName: rest.primary_parent_name,
+        primaryEmail: rest.primary_email,
+        primaryPhone: rest.primary_phone,
+        secondaryParentName: rest.secondary_parent_name,
+        secondaryEmail: rest.secondary_email,
+        secondaryPhone: rest.secondary_phone,
+        mailingAddress: rest.mailing_address,
+        tenantId: user.tenantId,
+        notificationPrefsJson: notifyPrefsFrom(notify_email, notify_whatsapp),
+      })
+      .returning({ id: students.id });
+    if (!row) return { error: "Insert failed.", fieldErrors: {} };
+    insertedId = row.id;
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Insert failed.",
+      fieldErrors: {},
+    };
   }
 
   revalidatePath("/tenant/students");
-  redirect(`/tenant/students/${data.id}/edit?created=1`);
+  redirect(`/tenant/students/${insertedId}/edit?created=1`);
 }
 
 export async function updateStudentAction(
@@ -148,15 +174,39 @@ export async function updateStudentAction(
   }
 
   const { id, notify_email, notify_whatsapp, ...updates } = parsed.data;
-  const supabase = createSupabaseServerClient();
-  const { error } = await supabase
-    .from("students")
-    .update({
-      ...updates,
-      notification_prefs_json: notifyPrefsFrom(notify_email, notify_whatsapp),
-    })
-    .eq("id", id);
-  if (error) return { error: error.message, fieldErrors: {} };
+
+  // App-level tenant isolation: only update rows in the caller's tenant
+  // (super_admin, tenantId null, may act across tenants).
+  const scope = user.tenantId
+    ? and(eq(students.id, id), eq(students.tenantId, user.tenantId))
+    : eq(students.id, id);
+  try {
+    await db
+      .update(students)
+      .set({
+        locationId: updates.location_id,
+        firstName: updates.first_name,
+        lastName: updates.last_name,
+        dob: updates.dob,
+        gradeLevel: updates.grade_level,
+        lifecycleStatus: updates.lifecycle_status,
+        internalNotes: updates.internal_notes,
+        primaryParentName: updates.primary_parent_name,
+        primaryEmail: updates.primary_email,
+        primaryPhone: updates.primary_phone,
+        secondaryParentName: updates.secondary_parent_name,
+        secondaryEmail: updates.secondary_email,
+        secondaryPhone: updates.secondary_phone,
+        mailingAddress: updates.mailing_address,
+        notificationPrefsJson: notifyPrefsFrom(notify_email, notify_whatsapp),
+      })
+      .where(scope);
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Update failed.",
+      fieldErrors: {},
+    };
+  }
 
   revalidatePath("/tenant/students");
   revalidatePath(`/tenant/students/${id}/edit`);
@@ -168,9 +218,21 @@ export async function deleteStudentAction(formData: FormData) {
   if (!canWrite(user.role)) redirect("/tenant/students?error=forbidden");
   const id = formData.get("id");
   if (typeof id !== "string") redirect("/tenant/students?error=invalid-id");
-  const supabase = createSupabaseServerClient();
-  const { error } = await supabase.from("students").delete().eq("id", id);
-  if (error) redirect(`/tenant/students?error=${encodeURIComponent(error.message)}`);
+
+  // App-level tenant isolation: only delete rows in the caller's tenant
+  // (super_admin, tenantId null, may act across tenants).
+  const scope = user.tenantId
+    ? and(eq(students.id, id), eq(students.tenantId, user.tenantId))
+    : eq(students.id, id);
+  try {
+    await db.delete(students).where(scope);
+  } catch (err) {
+    redirect(
+      `/tenant/students?error=${encodeURIComponent(
+        err instanceof Error ? err.message : "delete failed"
+      )}`
+    );
+  }
   revalidatePath("/tenant/students");
   redirect("/tenant/students?deleted=1");
 }
@@ -220,50 +282,54 @@ export async function enrollStudentAction(
     return { error: parsed.error.issues[0]?.message ?? "Invalid input.", success: false };
   }
 
-  const supabase = createSupabaseServerClient();
   const today = new Date().toISOString().slice(0, 10);
 
-  // Look up slot + classroom + location info in one shot.
-  const { data: slot } = await supabase
-    .from("time_slots")
-    .select(
-      "id, weekday, capacity_override, classrooms!inner(id, name, default_capacity, locations!inner(id, max_classes_per_student_per_week))"
+  // Look up slot + classroom + location info in one shot. Scoped to this
+  // tenant through the location join.
+  const [slotRow] = await db
+    .select({
+      id: timeSlots.id,
+      weekday: timeSlots.weekday,
+      capacity_override: timeSlots.capacityOverride,
+      classroom_id: classrooms.id,
+      default_capacity: classrooms.defaultCapacity,
+      location_id: locations.id,
+      max_classes_per_student_per_week: locations.maxClassesPerStudentPerWeek,
+    })
+    .from(timeSlots)
+    .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+    .innerJoin(locations, eq(locations.id, classrooms.locationId))
+    .where(
+      and(
+        eq(timeSlots.id, parsed.data.time_slot_id),
+        eq(locations.tenantId, user.tenantId!)
+      )
     )
-    .eq("id", parsed.data.time_slot_id)
-    .maybeSingle();
-  type SlotRow = {
-    id: string;
-    weekday: string;
-    capacity_override: number | null;
-    classrooms: {
-      id: string;
-      name: string;
-      default_capacity: number;
-      locations: { id: string; max_classes_per_student_per_week: number };
-    };
-  };
-  const slotRow = slot as unknown as SlotRow | null;
+    .limit(1);
   if (!slotRow) return { error: "Slot not found.", success: false };
 
   const targetWeekday = slotRow.weekday;
-  const targetClassroomId = slotRow.classrooms.id;
-  const locId = slotRow.classrooms.locations.id;
-  const cap = slotRow.classrooms.locations.max_classes_per_student_per_week;
-  const slotCapacity =
-    slotRow.capacity_override ?? slotRow.classrooms.default_capacity;
+  const targetClassroomId = slotRow.classroom_id;
+  const locId = slotRow.location_id;
+  const cap = slotRow.max_classes_per_student_per_week;
+  const slotCapacity = slotRow.capacity_override ?? slotRow.default_capacity;
 
   // Strict gt so legacy rows with effective_to=today are treated as ended.
-  const activeFilter = `effective_to.is.null,effective_to.gt.${today}`;
+  const activeFilter = or(
+    isNull(enrollments.effectiveTo),
+    gt(enrollments.effectiveTo, today)
+  );
 
   // 1. Per-slot capacity + already-enrolled check.
-  const { data: slotEnrollments } = await supabase
-    .from("enrollments")
-    .select("id, student_id")
-    .eq("time_slot_id", parsed.data.time_slot_id)
-    .or(activeFilter);
+  const slotEnrollments = await db
+    .select({ id: enrollments.id, student_id: enrollments.studentId })
+    .from(enrollments)
+    .where(
+      and(eq(enrollments.timeSlotId, parsed.data.time_slot_id), activeFilter)
+    );
 
-  const currentSlotCount = slotEnrollments?.length ?? 0;
-  const alreadyEnrolled = (slotEnrollments ?? []).some(
+  const currentSlotCount = slotEnrollments.length;
+  const alreadyEnrolled = slotEnrollments.some(
     (e) => e.student_id === parsed.data.student_id
   );
   if (alreadyEnrolled) {
@@ -281,32 +347,29 @@ export async function enrollStudentAction(
 
   // 2. All active enrollments for this student — used for same-day,
   //    same-classroom, and location quota checks.
-  const { data: existing } = await supabase
-    .from("enrollments")
-    .select(
-      "id, effective_to, time_slots!inner(weekday, classrooms!inner(id, name, locations!inner(id)))"
-    )
-    .eq("student_id", parsed.data.student_id)
-    .or(activeFilter);
-
-  type Existing = {
-    id: string;
-    effective_to: string | null;
-    time_slots: {
-      weekday: string;
-      classrooms: { id: string; name: string; locations: { id: string } };
-    };
-  };
-  const existingTyped = (existing ?? []) as unknown as Existing[];
+  const existingTyped = await db
+    .select({
+      id: enrollments.id,
+      effective_to: enrollments.effectiveTo,
+      weekday: timeSlots.weekday,
+      classroom_id: classrooms.id,
+      classroom_name: classrooms.name,
+      location_id: locations.id,
+    })
+    .from(enrollments)
+    .innerJoin(timeSlots, eq(timeSlots.id, enrollments.timeSlotId))
+    .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+    .innerJoin(locations, eq(locations.id, classrooms.locationId))
+    .where(and(eq(enrollments.studentId, parsed.data.student_id), activeFilter));
 
   // 2a. One classroom per student.
   const otherClassroom = existingTyped.find(
-    (e) => e.time_slots.classrooms.id !== targetClassroomId
+    (e) => e.classroom_id !== targetClassroomId
   );
   if (otherClassroom) {
     return {
       error:
-        `This student is already in ${otherClassroom.time_slots.classrooms.name}. ` +
+        `This student is already in ${otherClassroom.classroom_name}. ` +
         `Each student belongs to one classroom — remove their existing classes ` +
         `before switching.`,
       success: false,
@@ -314,9 +377,7 @@ export async function enrollStudentAction(
   }
 
   // 2b. One class per weekday rule.
-  const sameDay = existingTyped.find(
-    (e) => e.time_slots.weekday === targetWeekday
-  );
+  const sameDay = existingTyped.find((e) => e.weekday === targetWeekday);
   if (sameDay) {
     return {
       error:
@@ -329,7 +390,7 @@ export async function enrollStudentAction(
 
   // 2c. Per-location class quota.
   const existingAtLocation = existingTyped.filter(
-    (e) => e.time_slots.classrooms.locations.id === locId
+    (e) => e.location_id === locId
   );
   if (existingAtLocation.length >= cap) {
     return {
@@ -341,12 +402,18 @@ export async function enrollStudentAction(
     };
   }
 
-  const { error } = await supabase.from("enrollments").insert({
-    student_id: parsed.data.student_id,
-    time_slot_id: parsed.data.time_slot_id,
-    effective_from: today,
-  });
-  if (error) return { error: error.message, success: false };
+  try {
+    await db.insert(enrollments).values({
+      studentId: parsed.data.student_id,
+      timeSlotId: parsed.data.time_slot_id,
+      effectiveFrom: today,
+    });
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Insert failed.",
+      success: false,
+    };
+  }
 
   // Targeted materialize — only the slot this student just enrolled into,
   // not every slot in the tenant. Fast.
@@ -385,54 +452,48 @@ async function fireEnrollmentNotification(args: {
   studentId: string;
   timeSlotId: string;
 }) {
-  const service = createSupabaseServiceClient();
-
   const [studentRes, tenantRes, slotRes, adminIds] = await Promise.all([
-    service
-      .from("students")
-      .select(
-        "first_name, last_name, primary_parent_name, primary_email, notification_prefs_json"
-      )
-      .eq("id", args.studentId)
-      .maybeSingle(),
-    service
-      .from("tenants")
-      .select("name")
-      .eq("id", args.tenantId)
-      .maybeSingle(),
-    service
-      .from("time_slots")
-      .select("weekday, start_time, end_time, classrooms!inner(name)")
-      .eq("id", args.timeSlotId)
-      .maybeSingle(),
+    db
+      .select({
+        first_name: students.firstName,
+        last_name: students.lastName,
+        primary_parent_name: students.primaryParentName,
+        primary_email: students.primaryEmail,
+        notification_prefs_json: students.notificationPrefsJson,
+      })
+      .from(students)
+      .where(eq(students.id, args.studentId))
+      .limit(1),
+    db
+      .select({ name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, args.tenantId))
+      .limit(1),
+    db
+      .select({
+        weekday: timeSlots.weekday,
+        start_time: timeSlots.startTime,
+        end_time: timeSlots.endTime,
+        classroom_name: classrooms.name,
+      })
+      .from(timeSlots)
+      .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+      .where(eq(timeSlots.id, args.timeSlotId))
+      .limit(1),
     tenantAdminUserIds(args.tenantId),
   ]);
 
-  const student = studentRes.data as
-    | {
-        first_name: string;
-        last_name: string;
-        primary_parent_name: string | null;
-        primary_email: string | null;
-        notification_prefs_json: { email?: boolean } | null;
-      }
-    | null;
+  const student = studentRes[0];
   if (!student) return;
 
-  const slot = slotRes.data as
-    | {
-        weekday: string;
-        start_time: string;
-        end_time: string;
-        classrooms: { name: string };
-      }
-    | null;
+  const slot = slotRes[0];
   if (!slot) return;
 
-  const tenant = tenantRes.data as { name: string } | null;
+  const prefs = student.notification_prefs_json as { email?: boolean } | null;
+  const tenant = tenantRes[0] ?? null;
 
   const studentName = `${student.first_name} ${student.last_name}`.trim();
-  const classroomName = slot.classrooms.name;
+  const classroomName = slot.classroom_name;
   const weekdayLabel = WEEKDAY_LABELS[slot.weekday] ?? slot.weekday;
   const startTime = String(slot.start_time).slice(0, 5);
   const endTime = String(slot.end_time).slice(0, 5);
@@ -448,7 +509,7 @@ async function fireEnrollmentNotification(args: {
   };
 
   // Email goes to parent if they have an address and haven't opted out.
-  const wantsEmail = student.notification_prefs_json?.email !== false;
+  const wantsEmail = prefs?.email !== false;
   const sendToParent = wantsEmail && student.primary_email;
 
   await createNotification({
@@ -556,42 +617,50 @@ export async function endEnrollmentAction(formData: FormData) {
     redirect("/tenant/students?error=invalid-id");
   }
 
-  const supabase = createSupabaseServerClient();
-
   // 1. Look up the time slot for downstream cleanup before deleting.
-  const { data: en } = await supabase
-    .from("enrollments")
-    .select("time_slot_id")
-    .eq("id", id)
-    .maybeSingle();
-  const slotId = (en?.time_slot_id as string | undefined) ?? null;
+  const [en] = await db
+    .select({ time_slot_id: enrollments.timeSlotId })
+    .from(enrollments)
+    .where(eq(enrollments.id, id))
+    .limit(1);
+  const slotId = en?.time_slot_id ?? null;
 
   // 2. Hard-delete the enrollment. Past attendance survives (it's the audit
   //    trail of what happened). Future "expected" rows we clean up below.
-  const { error } = await supabase.from("enrollments").delete().eq("id", id);
-  if (error) {
+  try {
+    await db.delete(enrollments).where(eq(enrollments.id, id));
+  } catch (err) {
     redirect(
-      `/tenant/students/${studentId}/edit?error=${encodeURIComponent(error.message)}`
+      `/tenant/students/${studentId}/edit?error=${encodeURIComponent(
+        err instanceof Error ? err.message : "delete failed"
+      )}`
     );
   }
 
   // 3. Clean up upcoming "expected" attendance for this student + slot so the
   //    student doesn't keep showing on Today / Schedule for future weeks.
   if (slotId) {
-    const nowIso = new Date().toISOString();
-    const { data: futureSessions } = await supabase
-      .from("sessions")
-      .select("id")
-      .eq("time_slot_id", slotId)
-      .gte("scheduled_start_utc", nowIso);
-    const sessionIds = (futureSessions ?? []).map((s) => s.id as string);
+    const now = new Date();
+    const futureSessions = await db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.timeSlotId, slotId),
+          gte(sessions.scheduledStartUtc, now)
+        )
+      );
+    const sessionIds = futureSessions.map((s) => s.id);
     if (sessionIds.length > 0) {
-      await supabase
-        .from("attendance_records")
-        .delete()
-        .eq("status", "expected")
-        .eq("student_id", studentId)
-        .in("session_id", sessionIds);
+      await db
+        .delete(attendanceRecords)
+        .where(
+          and(
+            eq(attendanceRecords.status, "expected"),
+            eq(attendanceRecords.studentId, studentId),
+            inArray(attendanceRecords.sessionId, sessionIds)
+          )
+        );
     }
   }
 

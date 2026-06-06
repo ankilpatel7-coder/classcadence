@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { createSupabaseServiceClient } from "@/lib/supabase/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { tenants } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { getTimezoneGroups } from "@/lib/timezones";
 import { CreateLocationForm } from "./CreateLocationForm";
@@ -17,15 +19,14 @@ export default async function NewLocationPage() {
   }
 
   // Default the timezone field to the tenant's default.
-  const service = createSupabaseServiceClient();
-  const { data: tenant } = await service
-    .from("tenants")
-    .select("default_iana_tz")
-    .eq("id", user.tenantId!)
-    .maybeSingle();
+  const [tenant] = await db
+    .select({ defaultIanaTz: tenants.defaultIanaTz })
+    .from(tenants)
+    .where(eq(tenants.id, user.tenantId!))
+    .limit(1);
 
   const timezoneGroups = getTimezoneGroups();
-  const defaultTimezone = tenant?.default_iana_tz ?? "America/New_York";
+  const defaultTimezone = tenant?.defaultIanaTz ?? "America/New_York";
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">

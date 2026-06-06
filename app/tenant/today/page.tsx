@@ -1,6 +1,8 @@
 import { Fragment } from "react";
 import { CalendarDays, CheckCheck } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { and, asc, eq, gte, lte } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { locations as locationsTable, sessions } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import {
   formatTimeInTimezone,
@@ -47,33 +49,53 @@ export default async function TodayPage({
   searchParams: { error?: string };
 }) {
   const user = await getCurrentUserOrRedirect();
-  const supabase = createSupabaseServerClient();
 
-  const { data: locations } = await supabase
-    .from("locations")
-    .select("id, name, iana_timezone")
-    .eq("status", "active")
-    .order("created_at", { ascending: true });
+  // App-level tenant isolation: the owner db connection bypasses RLS, so scope
+  // every query by the caller's tenantId.
+  const tenantId = user.tenantId!;
 
-  const primaryLocation = locations?.[0];
+  const locations = await db
+    .select({
+      id: locationsTable.id,
+      name: locationsTable.name,
+      iana_timezone: locationsTable.ianaTimezone,
+    })
+    .from(locationsTable)
+    .where(
+      and(
+        eq(locationsTable.tenantId, tenantId),
+        eq(locationsTable.status, "active")
+      )
+    )
+    .orderBy(asc(locationsTable.createdAt));
+
+  const primaryLocation = locations[0];
   const primaryTz = primaryLocation?.iana_timezone ?? "UTC";
   const today = todayInTimezone(primaryTz);
 
   const startUtc = localToUtc(today, "00:00", primaryTz).toISOString();
   const endUtc = localToUtc(today, "23:59", primaryTz).toISOString();
 
-  const sessions: SessionRow[] = await loadSessionsInWindow(startUtc, endUtc);
+  const sessionRows: SessionRow[] = await loadSessionsInWindow(
+    tenantId,
+    startUtc,
+    endUtc
+  );
 
   // Diagnostic: if rendering empty, check the bare count to distinguish
   // "no data" from "data dropped by join".
   let diagnosticBareCount: number | null = null;
-  if (sessions.length === 0) {
-    const { count } = await supabase
-      .from("sessions")
-      .select("id", { count: "exact", head: true })
-      .gte("scheduled_start_utc", startUtc)
-      .lte("scheduled_start_utc", endUtc);
-    diagnosticBareCount = count ?? 0;
+  if (sessionRows.length === 0) {
+    const bare = await db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(
+        and(
+          gte(sessions.scheduledStartUtc, new Date(startUtc)),
+          lte(sessions.scheduledStartUtc, new Date(endUtc))
+        )
+      );
+    diagnosticBareCount = bare.length;
     console.log(
       "[today] empty render — tenantId:",
       user.tenantId,
@@ -87,7 +109,7 @@ export default async function TodayPage({
   }
 
   // Build day stats.
-  const totals = sessions.reduce(
+  const totals = sessionRows.reduce(
     (acc, s) => {
       for (const r of s.attendance_records ?? []) {
         acc.total++;
@@ -122,7 +144,7 @@ export default async function TodayPage({
     notes: { body: string; visibility: string; created_at: string }[];
   };
 
-  const rows: FlatRow[] = sessions
+  const rows: FlatRow[] = sessionRows
     .flatMap((s) =>
       (s.attendance_records ?? []).map<FlatRow>((r) => ({
         attendanceId: r.id,
@@ -181,7 +203,7 @@ export default async function TodayPage({
         </p>
       </div>
 
-      {sessions.length > 0 ? (
+      {sessionRows.length > 0 ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <DayStat label="Expected" value={totals.total} tone="muted" />
           <DayStat
@@ -200,7 +222,7 @@ export default async function TodayPage({
         </div>
       ) : null}
 
-      {sessions.length === 0 ? (
+      {sessionRows.length === 0 ? (
         <div className="space-y-3">
           <div className="rounded-lg border border-dashed border-line bg-surface px-6 py-12 text-center">
             <CalendarDays className="mx-auto h-6 w-6 text-muted" />

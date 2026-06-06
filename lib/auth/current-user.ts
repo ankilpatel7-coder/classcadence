@@ -1,6 +1,9 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { userProfiles } from "@/lib/db/schema";
+import { getServerSession } from "./session";
 import type { AppRole } from "./post-login-redirect";
 
 export type CurrentUser = {
@@ -11,30 +14,39 @@ export type CurrentUser = {
   fullName: string | null;
 };
 
-// Memoized per-request via React.cache so layout + page sharing the same
-// render pass only pay for one supabase.auth.getUser + user_profiles lookup.
-// Without this, each layout/page combo hits Supabase twice for the same data.
-export const getCurrentUserOrRedirect = cache(
-  async (): Promise<CurrentUser> => {
-    const supabase = createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+// Resolve the current user (or null if not signed in). Memoized per-request
+// via React.cache so layout + page in the same render pass pay for one Neon
+// Auth getSession + user_profiles lookup, not two.
+export const getCurrentUser = cache(
+  async (): Promise<CurrentUser | null> => {
+    const session = await getServerSession();
+    if (!session?.user) return null;
 
-    if (!user) redirect("/login");
-
-    const { data: profile } = await supabase
-      .from("user_profiles")
-      .select("role, tenant_id, full_name, email")
-      .eq("id", user.id)
-      .maybeSingle();
+    const [profile] = await db
+      .select({
+        role: userProfiles.role,
+        tenantId: userProfiles.tenantId,
+        fullName: userProfiles.fullName,
+        email: userProfiles.email,
+      })
+      .from(userProfiles)
+      .where(eq(userProfiles.id, session.user.id))
+      .limit(1);
 
     return {
-      id: user.id,
-      email: profile?.email ?? user.email ?? "",
+      id: session.user.id,
+      email: profile?.email ?? session.user.email ?? "",
       role: (profile?.role ?? null) as AppRole,
-      tenantId: profile?.tenant_id ?? null,
-      fullName: profile?.full_name ?? null,
+      tenantId: profile?.tenantId ?? null,
+      fullName: profile?.fullName ?? null,
     };
   }
 );
+
+// Same, but redirects to /login when there is no session. Use in protected
+// layouts/pages where an unauthenticated user should never see the content.
+export async function getCurrentUserOrRedirect(): Promise<CurrentUser> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  return user;
+}

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { MapPin, Pencil, Plus } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { asc, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { locations as locationsTable } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 
 export const dynamic = "force-dynamic";
@@ -21,14 +23,35 @@ export default async function LocationsPage({
   searchParams: { deleted?: string; error?: string };
 }) {
   const user = await getCurrentUserOrRedirect();
-  const supabase = createSupabaseServerClient();
 
-  const { data, error } = await supabase
-    .from("locations")
-    .select("id, name, city, region, iana_timezone, status, created_at")
-    .order("created_at", { ascending: true });
+  let locations: LocationRow[] = [];
+  let error: { message: string } | null = null;
+  try {
+    const rows = await db
+      .select({
+        id: locationsTable.id,
+        name: locationsTable.name,
+        city: locationsTable.city,
+        region: locationsTable.region,
+        iana_timezone: locationsTable.ianaTimezone,
+        status: locationsTable.status,
+        created_at: locationsTable.createdAt,
+      })
+      .from(locationsTable)
+      .where(
+        user.tenantId
+          ? eq(locationsTable.tenantId, user.tenantId)
+          : undefined
+      )
+      .orderBy(asc(locationsTable.createdAt));
+    locations = rows.map((r) => ({
+      ...r,
+      created_at: r.created_at.toISOString(),
+    }));
+  } catch (err) {
+    error = { message: err instanceof Error ? err.message : "Unknown error" };
+  }
 
-  const locations = (data ?? []) as LocationRow[];
   const canEdit = user.role === "tenant_admin" || user.role === "super_admin";
 
   return (

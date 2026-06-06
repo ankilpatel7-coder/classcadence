@@ -1,6 +1,27 @@
 import Link from "next/link";
 import { ChevronLeft, UserPlus } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  and,
+  or,
+  eq,
+  ne,
+  gt,
+  gte,
+  lte,
+  inArray,
+  isNull,
+  asc,
+} from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  enrollments,
+  timeSlots,
+  classrooms,
+  locations,
+  students,
+  sessions,
+  attendanceRecords,
+} from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import {
   ManualClassForm,
@@ -16,34 +37,34 @@ export default async function ManualClassPage({
 }: {
   searchParams: { error?: string };
 }) {
-  await getCurrentUserOrRedirect();
-  const supabase = createSupabaseServerClient();
+  const user = await getCurrentUserOrRedirect();
 
   const today = new Date().toISOString().slice(0, 10);
 
   // 1. Active enrollments to figure out which classroom each student is in.
-  const { data: enrollmentsRaw } = await supabase
-    .from("enrollments")
-    .select(
-      "student_id, time_slots!inner(classroom_id, classrooms!inner(id, name, color, default_capacity, status, locations!inner(name, iana_timezone, status)))"
-    )
-    .or(`effective_to.is.null,effective_to.gt.${today}`);
-
-  type EnrRaw = {
-    student_id: string;
-    time_slots: {
-      classroom_id: string;
-      classrooms: {
-        id: string;
-        name: string;
-        color: string;
-        default_capacity: number;
-        status: string;
-        locations: { name: string; iana_timezone: string; status: string };
-      };
-    };
-  };
-  const enrollmentsTyped = (enrollmentsRaw ?? []) as unknown as EnrRaw[];
+  //    Tenant isolation via location.tenantId.
+  const enrollmentsTyped = await db
+    .select({
+      studentId: enrollments.studentId,
+      classroomId: classrooms.id,
+      classroomName: classrooms.name,
+      classroomColor: classrooms.color,
+      defaultCapacity: classrooms.defaultCapacity,
+      classroomStatus: classrooms.status,
+      locationName: locations.name,
+      tz: locations.ianaTimezone,
+      locationStatus: locations.status,
+    })
+    .from(enrollments)
+    .innerJoin(timeSlots, eq(timeSlots.id, enrollments.timeSlotId))
+    .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+    .innerJoin(locations, eq(locations.id, classrooms.locationId))
+    .where(
+      and(
+        eq(locations.tenantId, user.tenantId!),
+        or(isNull(enrollments.effectiveTo), gt(enrollments.effectiveTo, today))
+      )
+    );
 
   type StudentClassroom = {
     classroomId: string;
@@ -55,36 +76,40 @@ export default async function ManualClassPage({
   };
   const studentClassroom = new Map<string, StudentClassroom>();
   for (const e of enrollmentsTyped) {
-    if (e.time_slots.classrooms.status !== "active") continue;
-    if (e.time_slots.classrooms.locations.status !== "active") continue;
-    if (!studentClassroom.has(e.student_id)) {
-      studentClassroom.set(e.student_id, {
-        classroomId: e.time_slots.classrooms.id,
-        classroomName: e.time_slots.classrooms.name,
-        classroomColor: e.time_slots.classrooms.color,
-        defaultCapacity: e.time_slots.classrooms.default_capacity,
-        locationName: e.time_slots.classrooms.locations.name,
-        tz: e.time_slots.classrooms.locations.iana_timezone,
+    if (e.classroomStatus !== "active") continue;
+    if (e.locationStatus !== "active") continue;
+    if (!studentClassroom.has(e.studentId)) {
+      studentClassroom.set(e.studentId, {
+        classroomId: e.classroomId,
+        classroomName: e.classroomName,
+        classroomColor: e.classroomColor ?? "#1E3A8A",
+        defaultCapacity: e.defaultCapacity,
+        locationName: e.locationName,
+        tz: e.tz,
       });
     }
   }
 
   // 2. Fetch the matching student records.
   const studentIds = Array.from(studentClassroom.keys());
-  const { data: studentsData } =
+  const studentsData =
     studentIds.length > 0
-      ? await supabase
-          .from("students")
-          .select("id, first_name, last_name")
-          .in("id", studentIds)
-      : { data: [] };
+      ? await db
+          .select({
+            id: students.id,
+            firstName: students.firstName,
+            lastName: students.lastName,
+          })
+          .from(students)
+          .where(inArray(students.id, studentIds))
+      : [];
 
-  const students: ManualStudent[] = (studentsData ?? [])
+  const studentsList: ManualStudent[] = studentsData
     .map((s) => {
-      const cls = studentClassroom.get(s.id as string)!;
+      const cls = studentClassroom.get(s.id)!;
       return {
-        id: s.id as string,
-        name: `${s.first_name ?? ""} ${s.last_name ?? ""}`.trim(),
+        id: s.id,
+        name: `${s.firstName ?? ""} ${s.lastName ?? ""}`.trim(),
         classroomId: cls.classroomId,
         classroomName: cls.classroomName,
         locationName: cls.locationName,
@@ -96,87 +121,99 @@ export default async function ManualClassPage({
   const uniqueClassroomIds = Array.from(
     new Set(Array.from(studentClassroom.values()).map((c) => c.classroomId))
   );
-  const { data: classroomSlots } =
+  const classroomSlots =
     uniqueClassroomIds.length > 0
-      ? await supabase
-          .from("time_slots")
-          .select("id, classroom_id, capacity_override")
-          .in("classroom_id", uniqueClassroomIds)
-          .eq("status", "active")
-      : { data: [] };
+      ? await db
+          .select({
+            id: timeSlots.id,
+            classroomId: timeSlots.classroomId,
+            capacityOverride: timeSlots.capacityOverride,
+          })
+          .from(timeSlots)
+          .where(
+            and(
+              inArray(timeSlots.classroomId, uniqueClassroomIds),
+              eq(timeSlots.status, "active")
+            )
+          )
+      : [];
 
-  const slotIds = (classroomSlots ?? []).map((s) => s.id as string);
+  const slotIds = classroomSlots.map((s) => s.id);
   const slotToClassroom = new Map<string, string>();
   const slotCapOverride = new Map<string, number | null>();
-  for (const s of classroomSlots ?? []) {
-    slotToClassroom.set(
-      s.id as string,
-      s.classroom_id as string
-    );
-    slotCapOverride.set(
-      s.id as string,
-      (s.capacity_override as number | null) ?? null
-    );
+  for (const s of classroomSlots) {
+    slotToClassroom.set(s.id, s.classroomId);
+    slotCapOverride.set(s.id, s.capacityOverride ?? null);
   }
 
-  const now = new Date().toISOString();
-  const horizonIso = new Date(
-    Date.now() + 30 * 24 * 60 * 60 * 1000
-  ).toISOString();
+  const now = new Date();
+  const horizon = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-  const { data: upcomingSessions } =
+  const upcomingSessions =
     slotIds.length > 0
-      ? await supabase
-          .from("sessions")
-          .select(
-            "id, scheduled_start_utc, scheduled_end_utc, time_slot_id, status"
+      ? await db
+          .select({
+            id: sessions.id,
+            scheduledStartUtc: sessions.scheduledStartUtc,
+            scheduledEndUtc: sessions.scheduledEndUtc,
+            timeSlotId: sessions.timeSlotId,
+            status: sessions.status,
+          })
+          .from(sessions)
+          .where(
+            and(
+              inArray(sessions.timeSlotId, slotIds),
+              gte(sessions.scheduledStartUtc, now),
+              lte(sessions.scheduledStartUtc, horizon),
+              ne(sessions.status, "cancelled")
+            )
           )
-          .in("time_slot_id", slotIds)
-          .gte("scheduled_start_utc", now)
-          .lte("scheduled_start_utc", horizonIso)
-          .neq("status", "cancelled")
-          .order("scheduled_start_utc", { ascending: true })
-      : { data: [] };
+          .orderBy(asc(sessions.scheduledStartUtc))
+      : [];
 
   // 4. Enrollment counts per session + which students are already on each.
-  const sessionIds = (upcomingSessions ?? []).map((s) => s.id as string);
-  const { data: attendanceData } =
+  const sessionIds = upcomingSessions.map((s) => s.id);
+  const attendanceData =
     sessionIds.length > 0
-      ? await supabase
-          .from("attendance_records")
-          .select("session_id, student_id, status")
-          .in("session_id", sessionIds)
-      : { data: [] };
+      ? await db
+          .select({
+            sessionId: attendanceRecords.sessionId,
+            studentId: attendanceRecords.studentId,
+            status: attendanceRecords.status,
+          })
+          .from(attendanceRecords)
+          .where(inArray(attendanceRecords.sessionId, sessionIds))
+      : [];
 
   const enrolledBySession = new Map<string, number>();
   const studentSessionPairs = new Set<string>();
-  for (const a of attendanceData ?? []) {
-    const sid = a.session_id as string;
+  for (const a of attendanceData) {
+    const sid = a.sessionId;
     if (a.status !== "absent" && a.status !== "excused") {
       enrolledBySession.set(sid, (enrolledBySession.get(sid) ?? 0) + 1);
     }
-    studentSessionPairs.add(`${a.student_id}_${sid}`);
+    studentSessionPairs.add(`${a.studentId}_${sid}`);
   }
 
   // 5. Group upcoming sessions by classroom for the client component.
   type ClassroomSession = ManualSessionOption;
   const sessionsByClassroom = new Map<string, ClassroomSession[]>();
-  for (const s of upcomingSessions ?? []) {
-    const cid = slotToClassroom.get(s.time_slot_id as string);
+  for (const s of upcomingSessions) {
+    const cid = slotToClassroom.get(s.timeSlotId);
     if (!cid) continue;
     const cls = Array.from(studentClassroom.values()).find(
       (c) => c.classroomId === cid
     );
     if (!cls) continue;
-    const cap = slotCapOverride.get(s.time_slot_id as string) ?? cls.defaultCapacity;
+    const cap = slotCapOverride.get(s.timeSlotId) ?? cls.defaultCapacity;
     const arr = sessionsByClassroom.get(cid) ?? [];
     arr.push({
-      id: s.id as string,
-      startUtc: s.scheduled_start_utc as string,
-      endUtc: s.scheduled_end_utc as string,
+      id: s.id,
+      startUtc: s.scheduledStartUtc.toISOString(),
+      endUtc: s.scheduledEndUtc.toISOString(),
       tz: cls.tz,
       capacity: cap,
-      enrolled: enrolledBySession.get(s.id as string) ?? 0,
+      enrolled: enrolledBySession.get(s.id) ?? 0,
     });
     sessionsByClassroom.set(cid, arr);
   }
@@ -184,7 +221,7 @@ export default async function ManualClassPage({
   // Build a per-student sessions list, filtering out sessions the student is
   // already on so the picker only shows addable ones.
   const sessionsByStudent: Record<string, ManualSessionOption[]> = {};
-  for (const student of students) {
+  for (const student of studentsList) {
     const classroomSessions = sessionsByClassroom.get(student.classroomId) ?? [];
     sessionsByStudent[student.id] = classroomSessions
       .filter((s) => !studentSessionPairs.has(`${student.id}_${s.id}`))
@@ -219,14 +256,14 @@ export default async function ManualClassPage({
         </div>
       ) : null}
 
-      {students.length === 0 ? (
+      {studentsList.length === 0 ? (
         <div className="rounded-md border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-ink">
           No students with active enrollments yet. Enroll a student first, then
           you can manually add them to other sessions.
         </div>
       ) : (
         <ManualClassForm
-          students={students}
+          students={studentsList}
           sessionsByStudent={sessionsByStudent}
         />
       )}

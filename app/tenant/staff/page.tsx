@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
-import { createSupabaseServiceClient } from "@/lib/supabase/server";
+import { asc, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { userProfiles } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { CreateStaffForm } from "./CreateStaffForm";
 import { RemoveStaffButton } from "./RemoveStaffButton";
@@ -30,17 +32,19 @@ export default async function StaffPage({
   }
   if (!user.tenantId) redirect("/tenant?error=no-tenant");
 
-  // Service-role read so we definitely get every member of this tenant —
-  // user_profiles RLS already permits tenant_admin to read everyone in tenant,
-  // but service role keeps intent explicit.
-  const service = createSupabaseServiceClient();
-  const { data: staffData } = await service
-    .from("user_profiles")
-    .select("id, email, full_name, role, created_at")
-    .eq("tenant_id", user.tenantId)
-    .order("created_at", { ascending: true });
-
-  const staff = staffData ?? [];
+  // Owner connection bypasses RLS — enforce tenant isolation in code so we
+  // only ever list members of the acting admin's tenant.
+  const staff = await db
+    .select({
+      id: userProfiles.id,
+      email: userProfiles.email,
+      full_name: userProfiles.fullName,
+      role: userProfiles.role,
+      created_at: userProfiles.createdAt,
+    })
+    .from(userProfiles)
+    .where(eq(userProfiles.tenantId, user.tenantId))
+    .orderBy(asc(userProfiles.createdAt));
 
   return (
     <div className="space-y-8">

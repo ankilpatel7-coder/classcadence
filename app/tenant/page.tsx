@@ -9,7 +9,18 @@ import {
   UserMinus,
   Users,
 } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { and, asc, desc, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  locations as locationsTable,
+  enrollments,
+  attendanceRecords,
+  sessions,
+  timeSlots,
+  classrooms,
+  students,
+  makeupOffers,
+} from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { AttendanceRing } from "@/app/_components/dashboard/AttendanceRing";
 import {
@@ -50,22 +61,44 @@ export default async function TenantHomePage({
   searchParams: { reminders_sent?: string; reminders_skipped?: string; error?: string };
 }) {
   const user = await getCurrentUserOrRedirect();
-  const supabase = createSupabaseServerClient();
+  const tenantId = user.tenantId!;
 
   const now = new Date();
-  const nowIso = now.toISOString();
   const fourWeeksAgo = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   // Locations first — we need the primary timezone to define "today" the same
   // way the Today page does, and we short-circuit to onboarding if there are
-  // none. RLS scopes everything to this tenant via the user-context client.
-  const { data: locationsData, error: locationsError } = await supabase
-    .from("locations")
-    .select("id, name, status, city, region, iana_timezone")
-    .order("created_at", { ascending: true });
+  // none. The owner connection bypasses RLS, so we scope to this tenant in code.
+  let locationsData: {
+    id: string;
+    name: string;
+    status: "active" | "inactive";
+    city: string | null;
+    region: string | null;
+    iana_timezone: string;
+  }[] = [];
+  let locationsError: { message: string } | null = null;
+  try {
+    locationsData = await db
+      .select({
+        id: locationsTable.id,
+        name: locationsTable.name,
+        status: locationsTable.status,
+        city: locationsTable.city,
+        region: locationsTable.region,
+        iana_timezone: locationsTable.ianaTimezone,
+      })
+      .from(locationsTable)
+      .where(eq(locationsTable.tenantId, tenantId))
+      .orderBy(asc(locationsTable.createdAt));
+  } catch (err) {
+    locationsError = {
+      message: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
 
-  const locations = locationsData ?? [];
+  const locations = locationsData;
 
   // Empty state — no locations yet. Keep the original onboarding card.
   if (locations.length === 0) {
@@ -87,48 +120,125 @@ export default async function TenantHomePage({
   const dayStartUtc = localToUtc(today, "00:00", primaryTz).toISOString();
   const dayEndUtc = localToUtc(today, "23:59", primaryTz).toISOString();
 
-  // Remaining dashboard queries fire in parallel.
+  // Remaining dashboard queries fire in parallel. The owner connection bypasses
+  // RLS, so every tenant-scoped query filters on the caller's tenantId in code
+  // (joining up to students / locations where the table has no direct tenant_id).
+  // Each query is wrapped so one failure surfaces a banner rather than throwing.
+  async function wrap<T>(
+    p: Promise<T>
+  ): Promise<{ data: T | null; error: { message: string } | null }> {
+    try {
+      return { data: await p, error: null };
+    } catch (err) {
+      return {
+        data: null,
+        error: { message: err instanceof Error ? err.message : "Unknown error" },
+      };
+    }
+  }
+
+  // Sessions on today's calendar day — reuse the Today page's loader so the
+  // tile counts exactly what Today shows (classes with >=1 enrolled student,
+  // empty auto-generated slots excluded). Awaited alongside the rest below.
+  const todaySessionsPromise = loadSessionsInWindow(
+    tenantId,
+    dayStartUtc,
+    dayEndUtc
+  );
+
   const [
     activeStudentsRes,
     attendanceLast4WeeksRes,
-    todaySessions,
     pendingMakeupsRes,
     recentAbsencesRes,
+    todaySessions,
   ] = await Promise.all([
     // Students with at least one active enrollment. effective_to is inclusive
     // (enrollment is active through that date), so use gte against today.
-    supabase
-      .from("enrollments")
-      .select("student_id, effective_to")
-      .or(`effective_to.is.null,effective_to.gte.${today}`),
+    wrap(
+      db
+        .select({ student_id: enrollments.studentId })
+        .from(enrollments)
+        .innerJoin(students, eq(students.id, enrollments.studentId))
+        .where(
+          and(
+            eq(students.tenantId, tenantId),
+            or(
+              isNull(enrollments.effectiveTo),
+              gte(enrollments.effectiveTo, today)
+            )
+          )
+        )
+    ),
 
     // 4 weeks of attendance — gives both the ring (last 7d) and the bars.
-    // Lift the default 1000-row PostgREST cap so busy tenants aren't truncated.
-    supabase
-      .from("attendance_records")
-      .select("status, sessions!session_id!inner(scheduled_start_utc)")
-      .gte("sessions.scheduled_start_utc", fourWeeksAgo.toISOString())
-      .lte("sessions.scheduled_start_utc", nowIso)
-      .limit(20000),
-
-    // Sessions on today's calendar day — reuse the Today page's loader so the
-    // tile counts exactly what Today shows (classes with >=1 enrolled student,
-    // empty auto-generated slots excluded).
-    loadSessionsInWindow(dayStartUtc, dayEndUtc),
+    wrap(
+      db
+        .select({
+          status: attendanceRecords.status,
+          scheduled_start_utc: sessions.scheduledStartUtc,
+        })
+        .from(attendanceRecords)
+        .innerJoin(sessions, eq(sessions.id, attendanceRecords.sessionId))
+        .innerJoin(students, eq(students.id, attendanceRecords.studentId))
+        .where(
+          and(
+            eq(students.tenantId, tenantId),
+            gte(sessions.scheduledStartUtc, fourWeeksAgo),
+            lte(sessions.scheduledStartUtc, now)
+          )
+        )
+        .limit(20000)
+    ),
 
     // Pending make-ups — match the Makeups page, which counts by state alone
-    // regardless of expiry.
-    supabase.from("makeup_offers").select("id").eq("state", "pending"),
+    // regardless of expiry. Scope to tenant via the absent attendance's student.
+    wrap(
+      db
+        .select({ id: makeupOffers.id })
+        .from(makeupOffers)
+        .innerJoin(
+          attendanceRecords,
+          eq(attendanceRecords.id, makeupOffers.absentAttendanceId)
+        )
+        .innerJoin(students, eq(students.id, attendanceRecords.studentId))
+        .where(
+          and(eq(students.tenantId, tenantId), eq(makeupOffers.state, "pending"))
+        )
+    ),
 
-    supabase
-      .from("attendance_records")
-      .select(
-        "id, student_id, sessions!session_id!inner(scheduled_start_utc, time_slots!inner(classrooms!inner(name, locations!inner(iana_timezone)))), students(first_name, last_name)"
-      )
-      .eq("status", "absent")
-      .gte("sessions.scheduled_start_utc", sevenDaysAgo.toISOString())
-      .order("sessions(scheduled_start_utc)", { ascending: false })
-      .limit(8),
+    wrap(
+      db
+        .select({
+          id: attendanceRecords.id,
+          student_id: attendanceRecords.studentId,
+          scheduled_start_utc: sessions.scheduledStartUtc,
+          classroom_name: classrooms.name,
+          iana_timezone: locationsTable.ianaTimezone,
+          first_name: students.firstName,
+          last_name: students.lastName,
+        })
+        .from(attendanceRecords)
+        .innerJoin(sessions, eq(sessions.id, attendanceRecords.sessionId))
+        .innerJoin(timeSlots, eq(timeSlots.id, sessions.timeSlotId))
+        .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+        .innerJoin(
+          locationsTable,
+          eq(locationsTable.id, classrooms.locationId)
+        )
+        .innerJoin(students, eq(students.id, attendanceRecords.studentId))
+        .where(
+          and(
+            eq(students.tenantId, tenantId),
+            eq(attendanceRecords.status, "absent"),
+            gte(sessions.scheduledStartUtc, sevenDaysAgo)
+          )
+        )
+        .orderBy(desc(sessions.scheduledStartUtc))
+        .limit(8)
+    ),
+
+    todaySessionsPromise,
   ]);
 
   // Surface query failures instead of silently rendering zeros.
@@ -142,14 +252,16 @@ export default async function TenantHomePage({
 
   // Active student count
   const activeStudentIds = new Set(
-    (activeStudentsRes.data ?? []).map(
-      (e) => e.student_id as string
-    )
+    (activeStudentsRes.data ?? []).map((e) => e.student_id)
   );
   const activeStudentsCount = activeStudentIds.size;
 
-  // Attendance counts split by 4 buckets.
-  const attRows = (attendanceLast4WeeksRes.data ?? []) as unknown as AttRow[];
+  // Attendance counts split by 4 buckets. Reshape flat rows into the nested
+  // `sessions` shape the bucketing helpers expect.
+  const attRows: AttRow[] = (attendanceLast4WeeksRes.data ?? []).map((a) => ({
+    status: a.status,
+    sessions: { scheduled_start_utc: a.scheduled_start_utc.toISOString() },
+  }));
   const last7d = attRows.filter(
     (a) =>
       a.sessions &&
@@ -172,7 +284,21 @@ export default async function TenantHomePage({
   const sessionsToday = todaySessions.length;
   const pendingMakeups = pendingMakeupsRes.data?.length ?? 0;
 
-  const absences = (recentAbsencesRes.data ?? []) as unknown as AbsenceRow[];
+  // Reshape flat join rows into the nested shape the absences list renders.
+  const absences: AbsenceRow[] = (recentAbsencesRes.data ?? []).map((a) => ({
+    id: a.id,
+    student_id: a.student_id,
+    sessions: {
+      scheduled_start_utc: a.scheduled_start_utc.toISOString(),
+      time_slots: {
+        classrooms: {
+          name: a.classroom_name,
+          locations: { iana_timezone: a.iana_timezone },
+        },
+      },
+    },
+    students: { first_name: a.first_name, last_name: a.last_name },
+  }));
 
   return (
     <div className="space-y-5">

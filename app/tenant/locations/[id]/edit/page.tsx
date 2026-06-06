@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, Plus } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { and, asc, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  locations as locationsTable,
+  operatingHoursRules,
+  holidayClosures,
+  classrooms as classroomsTable,
+  timeSlots,
+} from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { getTimezoneGroups } from "@/lib/timezones";
 import { EditLocationForm } from "./EditLocationForm";
@@ -52,57 +60,105 @@ export default async function EditLocationPage({
   };
 }) {
   const user = await getCurrentUserOrRedirect();
-  const supabase = createSupabaseServerClient();
 
-  const { data: location, error } = await supabase
-    .from("locations")
-    .select(
-      "id, name, address_line1, address_line2, city, region, postal_code, country, iana_timezone, phone, support_email, status, max_classes_per_student_per_week"
+  // App-level tenant scoping: the owner connection bypasses RLS, so filter by
+  // the caller's tenantId (super_admin may act across tenants).
+  const [location] = await db
+    .select({
+      id: locationsTable.id,
+      name: locationsTable.name,
+      address_line1: locationsTable.addressLine1,
+      address_line2: locationsTable.addressLine2,
+      city: locationsTable.city,
+      region: locationsTable.region,
+      postal_code: locationsTable.postalCode,
+      country: locationsTable.country,
+      iana_timezone: locationsTable.ianaTimezone,
+      phone: locationsTable.phone,
+      support_email: locationsTable.supportEmail,
+      status: locationsTable.status,
+      max_classes_per_student_per_week:
+        locationsTable.maxClassesPerStudentPerWeek,
+    })
+    .from(locationsTable)
+    .where(
+      user.tenantId
+        ? and(
+            eq(locationsTable.id, params.id),
+            eq(locationsTable.tenantId, user.tenantId)
+          )
+        : eq(locationsTable.id, params.id)
     )
-    .eq("id", params.id)
-    .maybeSingle();
+    .limit(1);
 
-  if (error || !location) notFound();
+  if (!location) notFound();
   const loc = location as LocationRow;
 
-  const [{ data: hoursData }, { data: holidaysData }, { data: classroomsData }] =
-    await Promise.all([
-      supabase
-        .from("operating_hours_rules")
-        .select("weekday, open_time, close_time")
-        .eq("location_id", loc.id),
-      supabase
-        .from("holiday_closures")
-        .select("id, start_date, end_date, reason")
-        .eq("location_id", loc.id)
-        .order("start_date", { ascending: true }),
-      supabase
-        .from("classrooms")
-        .select("id, name, default_capacity, color, status, time_slots(id)")
-        .eq("location_id", loc.id)
-        .order("created_at", { ascending: true }),
-    ]);
+  const [hoursData, holidaysData, classroomsData, slotRows] = await Promise.all([
+    db
+      .select({
+        weekday: operatingHoursRules.weekday,
+        open_time: operatingHoursRules.openTime,
+        close_time: operatingHoursRules.closeTime,
+      })
+      .from(operatingHoursRules)
+      .where(eq(operatingHoursRules.locationId, loc.id)),
+    db
+      .select({
+        id: holidayClosures.id,
+        start_date: holidayClosures.startDate,
+        end_date: holidayClosures.endDate,
+        reason: holidayClosures.reason,
+      })
+      .from(holidayClosures)
+      .where(eq(holidayClosures.locationId, loc.id))
+      .orderBy(asc(holidayClosures.startDate)),
+    db
+      .select({
+        id: classroomsTable.id,
+        name: classroomsTable.name,
+        default_capacity: classroomsTable.defaultCapacity,
+        color: classroomsTable.color,
+        status: classroomsTable.status,
+      })
+      .from(classroomsTable)
+      .where(eq(classroomsTable.locationId, loc.id))
+      .orderBy(asc(classroomsTable.createdAt)),
+    db
+      .select({
+        id: timeSlots.id,
+        classroomId: timeSlots.classroomId,
+      })
+      .from(timeSlots)
+      .innerJoin(
+        classroomsTable,
+        eq(timeSlots.classroomId, classroomsTable.id)
+      )
+      .where(eq(classroomsTable.locationId, loc.id)),
+  ]);
 
-  const classrooms: ClassroomSummary[] = (classroomsData ?? []).map((c) => {
-    const slots = (c as { time_slots: { id: string }[] | null }).time_slots;
-    return {
-      id: c.id,
-      name: c.name,
-      default_capacity: c.default_capacity,
-      color: c.color,
-      status: c.status as "active" | "inactive",
-      slot_count: Array.isArray(slots) ? slots.length : 0,
-    };
-  });
+  const slotCounts = new Map<string, number>();
+  for (const s of slotRows) {
+    slotCounts.set(s.classroomId, (slotCounts.get(s.classroomId) ?? 0) + 1);
+  }
 
-  const hours = (hoursData ?? []).map((r) => ({
+  const classrooms: ClassroomSummary[] = classroomsData.map((c) => ({
+    id: c.id,
+    name: c.name,
+    default_capacity: c.default_capacity,
+    color: c.color ?? "#1E3A8A",
+    status: c.status as "active" | "inactive",
+    slot_count: slotCounts.get(c.id) ?? 0,
+  }));
+
+  const hours = hoursData.map((r) => ({
     weekday: r.weekday as HoursWindow["weekday"],
     // Postgres time may come back as "09:00:00" — trim to "HH:MM" for <input type="time">.
     open_time: String(r.open_time).slice(0, 5),
     close_time: String(r.close_time).slice(0, 5),
   })) as HoursWindow[];
 
-  const holidays = (holidaysData ?? []) as Holiday[];
+  const holidays = holidaysData as Holiday[];
   const timezoneGroups = getTimezoneGroups();
   const canEdit = user.role === "tenant_admin" || user.role === "super_admin";
 

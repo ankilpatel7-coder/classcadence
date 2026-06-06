@@ -1,7 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  classrooms,
+  locations,
+  operatingHoursRules,
+  timeSlots,
+} from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { EditClassroomForm } from "./EditClassroomForm";
 import { DeleteClassroomButton } from "./DeleteClassroomButton";
@@ -35,44 +42,78 @@ export default async function EditClassroomPage({
   searchParams: { created?: string; saved?: string; error?: string };
 }) {
   const user = await getCurrentUserOrRedirect();
-  const supabase = createSupabaseServerClient();
 
-  const { data: classroom } = await supabase
-    .from("classrooms")
-    .select(
-      "id, location_id, name, description, default_capacity, color, status"
+  // App-level tenant scoping: join classroom -> location and filter by the
+  // caller's tenantId (owner connection bypasses RLS). super_admin (null
+  // tenantId) may act across tenants.
+  const [classroom] = await db
+    .select({
+      id: classrooms.id,
+      location_id: classrooms.locationId,
+      name: classrooms.name,
+      description: classrooms.description,
+      default_capacity: classrooms.defaultCapacity,
+      color: classrooms.color,
+      status: classrooms.status,
+      location_name: locations.name,
+    })
+    .from(classrooms)
+    .innerJoin(locations, eq(classrooms.locationId, locations.id))
+    .where(
+      user.tenantId
+        ? and(
+            eq(classrooms.id, params.cid),
+            eq(locations.tenantId, user.tenantId)
+          )
+        : eq(classrooms.id, params.cid)
     )
-    .eq("id", params.cid)
-    .maybeSingle();
+    .limit(1);
 
   if (!classroom || classroom.location_id !== params.id) notFound();
-  const room = classroom as ClassroomRow;
+  const room: ClassroomRow = {
+    id: classroom.id,
+    location_id: classroom.location_id,
+    name: classroom.name,
+    description: classroom.description,
+    default_capacity: classroom.default_capacity,
+    color: classroom.color ?? "#1E3A8A",
+    status: classroom.status as "active" | "inactive",
+  };
 
-  const { data: location } = await supabase
-    .from("locations")
-    .select("name")
-    .eq("id", params.id)
-    .maybeSingle();
+  const location = { name: classroom.location_name };
 
-  const [{ data: hoursData }, { data: slotsData }] = await Promise.all([
-    supabase
-      .from("operating_hours_rules")
-      .select("weekday, open_time, close_time")
-      .eq("location_id", params.id),
-    supabase
-      .from("time_slots")
-      .select("id, weekday, start_time, end_time")
-      .eq("classroom_id", params.cid)
-      .eq("status", "active"),
+  const [hoursData, slotsData] = await Promise.all([
+    db
+      .select({
+        weekday: operatingHoursRules.weekday,
+        open_time: operatingHoursRules.openTime,
+        close_time: operatingHoursRules.closeTime,
+      })
+      .from(operatingHoursRules)
+      .where(eq(operatingHoursRules.locationId, params.id)),
+    db
+      .select({
+        id: timeSlots.id,
+        weekday: timeSlots.weekday,
+        start_time: timeSlots.startTime,
+        end_time: timeSlots.endTime,
+      })
+      .from(timeSlots)
+      .where(
+        and(
+          eq(timeSlots.classroomId, params.cid),
+          eq(timeSlots.status, "active")
+        )
+      ),
   ]);
 
-  const operatingHours = (hoursData ?? []).map((h) => ({
+  const operatingHours = hoursData.map((h) => ({
     weekday: h.weekday as Weekday,
     open_time: String(h.open_time).slice(0, 5),
     close_time: String(h.close_time).slice(0, 5),
   })) as HoursWindow[];
 
-  const slots = (slotsData ?? []).map((s) => ({
+  const slots = slotsData.map((s) => ({
     id: s.id,
     weekday: s.weekday as Weekday,
     start_time: String(s.start_time).slice(0, 5),

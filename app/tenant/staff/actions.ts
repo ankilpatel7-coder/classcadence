@@ -3,8 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { createSupabaseServiceClient } from "@/lib/supabase/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { userProfiles } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
+import { createNeonAuthUser, deleteNeonAuthUser } from "@/lib/auth/admin";
 
 function ensureTenantAdmin(role: string | null | undefined) {
   if (role !== "tenant_admin" && role !== "super_admin") {
@@ -39,13 +42,9 @@ export type CreateStaffState = {
   } | null;
 };
 
-function friendly(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err);
-  if (/already.*registered|user.*already.*exists/i.test(raw)) {
-    return (
-      "An auth user with that email already exists. Pick a different email " +
-      "or have your platform admin delete the existing user in Supabase."
-    );
+function friendly(code: string | undefined, raw: string): string {
+  if (code === "USER_ALREADY_EXISTS" || /already.*exists/i.test(raw)) {
+    return "A user with that email already exists. Pick a different email.";
   }
   return raw;
 }
@@ -72,32 +71,39 @@ export async function createStaffAction(
   }
 
   const { email, full_name, role, password } = parsed.data;
-  const service = createSupabaseServiceClient();
 
-  const { data, error } = await service.auth.admin.createUser({
+  const created = await createNeonAuthUser({
     email,
     password,
-    email_confirm: true,
-    user_metadata: { full_name: full_name ?? "" },
+    name: full_name ?? "",
   });
-  if (error) return { error: friendly(error), success: false };
-
-  const newUserId = data.user?.id;
-  if (!newUserId) {
-    return { error: "Account creation returned no user id.", success: false };
+  if (!created.ok) {
+    return { error: friendly(created.code, created.error), success: false };
   }
 
-  const { error: profileError } = await service
-    .from("user_profiles")
-    .update({
-      role,
-      tenant_id: user.tenantId,
-      full_name: full_name ?? null,
-    })
-    .eq("id", newUserId);
-  if (profileError) {
+  // No DB trigger creates the profile (unlike Supabase) — insert it here,
+  // scoped to the acting admin's tenant.
+  try {
+    await db
+      .insert(userProfiles)
+      .values({
+        id: created.id,
+        email,
+        fullName: full_name ?? null,
+        role,
+        tenantId: user.tenantId,
+      })
+      .onConflictDoUpdate({
+        target: userProfiles.id,
+        set: { role, tenantId: user.tenantId, fullName: full_name ?? null, email },
+      });
+  } catch (err) {
+    // Roll back the auth user so a half-created account doesn't linger.
+    await deleteNeonAuthUser(created.id).catch(() => {});
     return {
-      error: `Account created but profile update failed: ${profileError.message}`,
+      error: `Account created but profile setup failed: ${
+        err instanceof Error ? err.message : "unknown error"
+      }`,
       success: false,
     };
   }
@@ -126,29 +132,35 @@ export async function removeStaffAction(formData: FormData) {
     );
   }
 
-  const service = createSupabaseServiceClient();
-  // Verify the target is in this tenant before deleting (defence in depth on
-  // top of the form action).
-  const { data: target } = await service
-    .from("user_profiles")
-    .select("id, tenant_id, role")
-    .eq("id", staffIdStr)
-    .maybeSingle();
-  if (!target || target.tenant_id !== user.tenantId) {
+  // Verify the target is in this tenant before deleting (defence in depth).
+  const [target] = await db
+    .select({
+      id: userProfiles.id,
+      tenantId: userProfiles.tenantId,
+      role: userProfiles.role,
+    })
+    .from(userProfiles)
+    .where(eq(userProfiles.id, staffIdStr))
+    .limit(1);
+
+  if (!target || target.tenantId !== user.tenantId) {
     redirect("/tenant/staff?error=not-in-tenant");
   }
   if (target.role === "tenant_admin") {
     redirect(
       "/tenant/staff?error=" +
-        encodeURIComponent(
-          "Tenant Admins must be removed by your platform admin."
-        )
+        encodeURIComponent("Tenant Admins must be removed by your platform admin.")
     );
   }
 
-  const { error } = await service.auth.admin.deleteUser(staffIdStr);
-  if (error) {
-    redirect("/tenant/staff?error=" + encodeURIComponent(error.message));
+  try {
+    await deleteNeonAuthUser(staffIdStr);
+    await db.delete(userProfiles).where(eq(userProfiles.id, staffIdStr));
+  } catch (err) {
+    redirect(
+      "/tenant/staff?error=" +
+        encodeURIComponent(err instanceof Error ? err.message : "delete failed")
+    );
   }
 
   revalidatePath("/tenant/staff");

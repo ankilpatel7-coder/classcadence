@@ -3,7 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  locations,
+  operatingHoursRules,
+  holidayClosures,
+} from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 
 function emptyToNull<T extends z.ZodTypeAny>(schema: T) {
@@ -97,20 +103,45 @@ export async function createLocationAction(
     };
   }
 
-  const supabase = createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("locations")
-    .insert({ ...parsed.data, tenant_id: user.tenantId })
-    .select("id")
-    .single();
+  const {
+    address_line1,
+    address_line2,
+    postal_code,
+    iana_timezone,
+    support_email,
+    max_classes_per_student_per_week,
+    ...core
+  } = parsed.data;
 
-  if (error || !data) {
-    return { error: error?.message ?? "Insert failed.", fieldErrors: empty };
+  let inserted: { id: string } | undefined;
+  try {
+    [inserted] = await db
+      .insert(locations)
+      .values({
+        ...core,
+        addressLine1: address_line1,
+        addressLine2: address_line2,
+        postalCode: postal_code,
+        ianaTimezone: iana_timezone,
+        supportEmail: support_email,
+        maxClassesPerStudentPerWeek: max_classes_per_student_per_week,
+        tenantId: user.tenantId,
+      })
+      .returning({ id: locations.id });
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Insert failed.",
+      fieldErrors: empty,
+    };
+  }
+
+  if (!inserted) {
+    return { error: "Insert failed.", fieldErrors: empty };
   }
 
   revalidatePath("/tenant");
   revalidatePath("/tenant/locations");
-  redirect(`/tenant/locations/${data.id}/edit?created=1`);
+  redirect(`/tenant/locations/${inserted.id}/edit?created=1`);
 }
 
 export async function updateLocationAction(
@@ -144,10 +175,51 @@ export async function updateLocationAction(
     };
   }
 
-  const { id, ...updates } = parsed.data;
-  const supabase = createSupabaseServerClient();
-  const { error } = await supabase.from("locations").update(updates).eq("id", id);
-  if (error) return { error: error.message, fieldErrors: empty };
+  const {
+    id,
+    address_line1,
+    address_line2,
+    postal_code,
+    iana_timezone,
+    support_email,
+    max_classes_per_student_per_week,
+    status,
+    name,
+    city,
+    region,
+    country,
+    phone,
+  } = parsed.data;
+
+  // App-level tenant scoping: restrict the update to the caller's tenant.
+  try {
+    await db
+      .update(locations)
+      .set({
+        name,
+        addressLine1: address_line1,
+        addressLine2: address_line2,
+        city,
+        region,
+        postalCode: postal_code,
+        country,
+        ianaTimezone: iana_timezone,
+        phone,
+        supportEmail: support_email,
+        maxClassesPerStudentPerWeek: max_classes_per_student_per_week,
+        status,
+      })
+      .where(
+        user.tenantId
+          ? and(eq(locations.id, id), eq(locations.tenantId, user.tenantId))
+          : eq(locations.id, id)
+      );
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Update failed.",
+      fieldErrors: empty,
+    };
+  }
 
   revalidatePath("/tenant");
   revalidatePath("/tenant/locations");
@@ -164,9 +236,25 @@ export async function deleteLocationAction(formData: FormData) {
   if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) {
     redirect("/tenant/locations?error=invalid-id");
   }
-  const supabase = createSupabaseServerClient();
-  const { error } = await supabase.from("locations").delete().eq("id", id);
-  if (error) redirect(`/tenant/locations?error=${encodeURIComponent(error.message)}`);
+  const locationId = id as string;
+  try {
+    await db
+      .delete(locations)
+      .where(
+        user.tenantId
+          ? and(
+              eq(locations.id, locationId),
+              eq(locations.tenantId, user.tenantId)
+            )
+          : eq(locations.id, locationId)
+      );
+  } catch (err) {
+    redirect(
+      `/tenant/locations?error=${encodeURIComponent(
+        err instanceof Error ? err.message : "Delete failed."
+      )}`
+    );
+  }
 
   revalidatePath("/tenant");
   revalidatePath("/tenant/locations");
@@ -227,26 +315,33 @@ export async function saveOperatingHoursAction(
     }
   }
 
-  const supabase = createSupabaseServerClient();
+  // App-level tenant scoping: confirm the location belongs to the caller's
+  // tenant before mutating its hours (owner connection bypasses RLS).
+  if (!(await locationInTenant(parsed.data.location_id, user.tenantId))) {
+    return { error: "Not allowed.", success: false };
+  }
 
-  // Replace-all semantics: delete existing rules for this location, then insert new ones.
-  const { error: deleteError } = await supabase
-    .from("operating_hours_rules")
-    .delete()
-    .eq("location_id", parsed.data.location_id);
-  if (deleteError) return { error: deleteError.message, success: false };
+  try {
+    // Replace-all semantics: delete existing rules for this location, then insert new ones.
+    await db
+      .delete(operatingHoursRules)
+      .where(eq(operatingHoursRules.locationId, parsed.data.location_id));
 
-  if (parsed.data.rows.length > 0) {
-    const inserts = parsed.data.rows.map((r) => ({
-      location_id: parsed.data.location_id,
-      weekday: r.weekday,
-      open_time: r.open_time,
-      close_time: r.close_time,
-    }));
-    const { error: insertError } = await supabase
-      .from("operating_hours_rules")
-      .insert(inserts);
-    if (insertError) return { error: insertError.message, success: false };
+    if (parsed.data.rows.length > 0) {
+      await db.insert(operatingHoursRules).values(
+        parsed.data.rows.map((r) => ({
+          locationId: parsed.data.location_id,
+          weekday: r.weekday,
+          openTime: r.open_time,
+          closeTime: r.close_time,
+        }))
+      );
+    }
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Save failed.",
+      success: false,
+    };
   }
 
   revalidatePath(`/tenant/locations/${parsed.data.location_id}/edit`);
@@ -295,12 +390,46 @@ export async function addHolidayAction(
     return { error: "End date must be on or after start date.", success: false };
   }
 
-  const supabase = createSupabaseServerClient();
-  const { error } = await supabase.from("holiday_closures").insert(parsed.data);
-  if (error) return { error: error.message, success: false };
+  // App-level tenant scoping: confirm the location belongs to the tenant.
+  if (!(await locationInTenant(parsed.data.location_id, user.tenantId))) {
+    return { error: "Not allowed.", success: false };
+  }
+
+  try {
+    await db.insert(holidayClosures).values({
+      locationId: parsed.data.location_id,
+      startDate: parsed.data.start_date,
+      endDate: parsed.data.end_date,
+      reason: parsed.data.reason,
+    });
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Save failed.",
+      success: false,
+    };
+  }
 
   revalidatePath(`/tenant/locations/${parsed.data.location_id}/edit`);
   return { error: null, success: true };
+}
+
+// App-level tenant scoping helper: true when the location exists and (for a
+// tenant-scoped caller) belongs to their tenant. super_admin (null tenantId)
+// may act across tenants.
+async function locationInTenant(
+  locationId: string,
+  tenantId: string | null
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: locations.id })
+    .from(locations)
+    .where(
+      tenantId
+        ? and(eq(locations.id, locationId), eq(locations.tenantId, tenantId))
+        : eq(locations.id, locationId)
+    )
+    .limit(1);
+  return Boolean(row);
 }
 
 export async function deleteHolidayAction(formData: FormData) {
@@ -317,13 +446,31 @@ export async function deleteHolidayAction(formData: FormData) {
   if (typeof id !== "string" || typeof locationId !== "string") {
     redirect("/tenant/locations?error=invalid-id");
   }
-  const supabase = createSupabaseServerClient();
-  const { error } = await supabase.from("holiday_closures").delete().eq("id", id);
-  if (error) {
+  const holidayId = id as string;
+  const locationIdStr = locationId as string;
+
+  // App-level tenant scoping: only delete a holiday whose location belongs to
+  // the caller's tenant.
+  if (!(await locationInTenant(locationIdStr, user.tenantId))) {
+    redirect(`/tenant/locations?error=forbidden`);
+  }
+
+  try {
+    await db
+      .delete(holidayClosures)
+      .where(
+        and(
+          eq(holidayClosures.id, holidayId),
+          eq(holidayClosures.locationId, locationIdStr)
+        )
+      );
+  } catch (err) {
     redirect(
-      `/tenant/locations/${locationId}/edit?error=${encodeURIComponent(error.message)}`
+      `/tenant/locations/${locationIdStr}/edit?error=${encodeURIComponent(
+        err instanceof Error ? err.message : "Delete failed."
+      )}`
     );
   }
-  revalidatePath(`/tenant/locations/${locationId}/edit`);
-  redirect(`/tenant/locations/${locationId}/edit?holiday_deleted=1`);
+  revalidatePath(`/tenant/locations/${locationIdStr}/edit`);
+  redirect(`/tenant/locations/${locationIdStr}/edit?holiday_deleted=1`);
 }

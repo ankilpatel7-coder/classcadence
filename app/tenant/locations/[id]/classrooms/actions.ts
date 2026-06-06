@@ -3,9 +3,55 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { and, eq, inArray } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  classrooms,
+  locations,
+  operatingHoursRules,
+  enrollments,
+  timeSlots,
+} from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { materializeSessions } from "@/app/tenant/today/actions";
+
+// App-level tenant scoping helpers: the owner connection bypasses RLS, so we
+// confirm ownership in code. super_admin (null tenantId) may act across tenants.
+async function locationInTenant(
+  locationId: string,
+  tenantId: string | null
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: locations.id })
+    .from(locations)
+    .where(
+      tenantId
+        ? and(eq(locations.id, locationId), eq(locations.tenantId, tenantId))
+        : eq(locations.id, locationId)
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+async function classroomInTenant(
+  classroomId: string,
+  locationId: string,
+  tenantId: string | null
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: classrooms.id })
+    .from(classrooms)
+    .innerJoin(locations, eq(classrooms.locationId, locations.id))
+    .where(
+      and(
+        eq(classrooms.id, classroomId),
+        eq(classrooms.locationId, locationId),
+        tenantId ? eq(locations.tenantId, tenantId) : undefined
+      )
+    )
+    .limit(1);
+  return Boolean(row);
+}
 
 const CORE = {
   name: z.string().trim().min(2, "Name must be at least 2 characters.").max(120),
@@ -87,21 +133,39 @@ export async function createClassroomAction(
     };
   }
 
-  const supabase = createSupabaseServerClient();
-  const { location_id, ...rest } = parsed.data;
-  const { data, error } = await supabase
-    .from("classrooms")
-    .insert({ location_id, ...rest })
-    .select("id")
-    .single();
+  const { location_id, name, description, default_capacity, color } = parsed.data;
 
-  if (error || !data) {
-    return { error: error?.message ?? "Insert failed.", fieldErrors: empty };
+  // Confirm the target location belongs to the caller's tenant before writing.
+  if (!(await locationInTenant(location_id, user.tenantId))) {
+    return { error: "Not allowed.", fieldErrors: empty };
+  }
+
+  let inserted: { id: string } | undefined;
+  try {
+    [inserted] = await db
+      .insert(classrooms)
+      .values({
+        locationId: location_id,
+        name,
+        description,
+        defaultCapacity: default_capacity,
+        color,
+      })
+      .returning({ id: classrooms.id });
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Insert failed.",
+      fieldErrors: empty,
+    };
+  }
+
+  if (!inserted) {
+    return { error: "Insert failed.", fieldErrors: empty };
   }
 
   revalidatePath(`/tenant/locations/${location_id}/edit`);
   redirect(
-    `/tenant/locations/${location_id}/classrooms/${data.id}/edit?created=1`
+    `/tenant/locations/${location_id}/classrooms/${inserted.id}/edit?created=1`
   );
 }
 
@@ -130,13 +194,31 @@ export async function updateClassroomAction(
     };
   }
 
-  const { id, location_id, ...updates } = parsed.data;
-  const supabase = createSupabaseServerClient();
-  const { error } = await supabase
-    .from("classrooms")
-    .update(updates)
-    .eq("id", id);
-  if (error) return { error: error.message, fieldErrors: empty };
+  const { id, location_id, status, name, description, default_capacity, color } =
+    parsed.data;
+
+  // Confirm the classroom belongs to a location in the caller's tenant.
+  if (!(await classroomInTenant(id, location_id, user.tenantId))) {
+    return { error: "Not allowed.", fieldErrors: empty };
+  }
+
+  try {
+    await db
+      .update(classrooms)
+      .set({
+        name,
+        description,
+        defaultCapacity: default_capacity,
+        color,
+        status,
+      })
+      .where(eq(classrooms.id, id));
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Update failed.",
+      fieldErrors: empty,
+    };
+  }
 
   revalidatePath(`/tenant/locations/${location_id}/edit`);
   revalidatePath(`/tenant/locations/${location_id}/classrooms/${id}/edit`);
@@ -153,15 +235,25 @@ export async function deleteClassroomAction(formData: FormData) {
   if (typeof id !== "string" || typeof locationId !== "string") {
     redirect("/tenant/locations?error=invalid-id");
   }
-  const supabase = createSupabaseServerClient();
-  const { error } = await supabase.from("classrooms").delete().eq("id", id);
-  if (error) {
+  const classroomId = id as string;
+  const locationIdStr = locationId as string;
+
+  // Confirm the classroom belongs to a location in the caller's tenant.
+  if (!(await classroomInTenant(classroomId, locationIdStr, user.tenantId))) {
+    redirect("/tenant/locations?error=forbidden");
+  }
+
+  try {
+    await db.delete(classrooms).where(eq(classrooms.id, classroomId));
+  } catch (err) {
     redirect(
-      `/tenant/locations/${locationId}/edit?error=${encodeURIComponent(error.message)}`
+      `/tenant/locations/${locationIdStr}/edit?error=${encodeURIComponent(
+        err instanceof Error ? err.message : "Delete failed."
+      )}`
     );
   }
-  revalidatePath(`/tenant/locations/${locationId}/edit`);
-  redirect(`/tenant/locations/${locationId}/edit?classroom_deleted=1`);
+  revalidatePath(`/tenant/locations/${locationIdStr}/edit`);
+  redirect(`/tenant/locations/${locationIdStr}/edit?classroom_deleted=1`);
 }
 
 // ===================== Time slots =====================
@@ -252,13 +344,28 @@ export async function saveTimeSlotsAction(
     }
   }
 
+  // App-level tenant scoping: confirm the classroom + location belong to the
+  // caller's tenant before any reads/writes.
+  if (
+    !(await classroomInTenant(
+      parsed.data.classroom_id,
+      parsed.data.location_id,
+      user.tenantId
+    ))
+  ) {
+    return { error: "Not allowed.", success: false };
+  }
+
   // FR-TS-03: every added cell must sit inside operating hours for that weekday.
-  const supabase = createSupabaseServerClient();
-  const { data: hoursData } = await supabase
-    .from("operating_hours_rules")
-    .select("weekday, open_time, close_time")
-    .eq("location_id", parsed.data.location_id);
-  const hours = (hoursData ?? []) as HoursRule[];
+  const hoursData = await db
+    .select({
+      weekday: operatingHoursRules.weekday,
+      open_time: operatingHoursRules.openTime,
+      close_time: operatingHoursRules.closeTime,
+    })
+    .from(operatingHoursRules)
+    .where(eq(operatingHoursRules.locationId, parsed.data.location_id));
+  const hours = hoursData as HoursRule[];
 
   if (hours.length > 0) {
     for (const s of parsed.data.added_cells) {
@@ -277,31 +384,31 @@ export async function saveTimeSlotsAction(
   //    enrollments referencing it; hard-delete otherwise. This protects the
   //    REFERENCES enrollments(time_slot_id) ON DELETE RESTRICT relationship.
   if (parsed.data.removed_slot_ids.length > 0) {
-    const { data: refRows } = await supabase
-      .from("enrollments")
-      .select("time_slot_id")
-      .in("time_slot_id", parsed.data.removed_slot_ids);
-    const refSet = new Set(
-      (refRows ?? []).map((r) => r.time_slot_id as string)
-    );
+    const refRows = await db
+      .select({ time_slot_id: enrollments.timeSlotId })
+      .from(enrollments)
+      .where(inArray(enrollments.timeSlotId, parsed.data.removed_slot_ids));
+    const refSet = new Set(refRows.map((r) => r.time_slot_id));
     const softTargets = parsed.data.removed_slot_ids.filter((id) => refSet.has(id));
     const hardTargets = parsed.data.removed_slot_ids.filter(
       (id) => !refSet.has(id)
     );
 
-    if (softTargets.length > 0) {
-      const { error } = await supabase
-        .from("time_slots")
-        .update({ status: "inactive" })
-        .in("id", softTargets);
-      if (error) return { error: error.message, success: false };
-    }
-    if (hardTargets.length > 0) {
-      const { error } = await supabase
-        .from("time_slots")
-        .delete()
-        .in("id", hardTargets);
-      if (error) return { error: error.message, success: false };
+    try {
+      if (softTargets.length > 0) {
+        await db
+          .update(timeSlots)
+          .set({ status: "inactive" })
+          .where(inArray(timeSlots.id, softTargets));
+      }
+      if (hardTargets.length > 0) {
+        await db.delete(timeSlots).where(inArray(timeSlots.id, hardTargets));
+      }
+    } catch (err) {
+      return {
+        error: err instanceof Error ? err.message : "Save failed.",
+        success: false,
+      };
     }
   }
 
@@ -309,18 +416,25 @@ export async function saveTimeSlotsAction(
   //    only the slots that actually changed.
   let insertedSlotIds: string[] = [];
   if (parsed.data.added_cells.length > 0) {
-    const inserts = parsed.data.added_cells.map((s) => ({
-      classroom_id: parsed.data.classroom_id,
-      weekday: s.weekday,
-      start_time: s.start_time,
-      end_time: s.end_time,
-    }));
-    const { data: inserted, error } = await supabase
-      .from("time_slots")
-      .insert(inserts)
-      .select("id");
-    if (error) return { error: error.message, success: false };
-    insertedSlotIds = (inserted ?? []).map((r) => r.id as string);
+    try {
+      const inserted = await db
+        .insert(timeSlots)
+        .values(
+          parsed.data.added_cells.map((s) => ({
+            classroomId: parsed.data.classroom_id,
+            weekday: s.weekday,
+            startTime: s.start_time,
+            endTime: s.end_time,
+          }))
+        )
+        .returning({ id: timeSlots.id });
+      insertedSlotIds = inserted.map((r) => r.id);
+    } catch (err) {
+      return {
+        error: err instanceof Error ? err.message : "Save failed.",
+        success: false,
+      };
+    }
   }
 
   // Auto-materialize the just-inserted slots so they appear on Today/Schedule

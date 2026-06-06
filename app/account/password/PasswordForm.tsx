@@ -1,36 +1,70 @@
 "use client";
 
 import { useState } from "react";
-import { useFormState, useFormStatus } from "react-dom";
 import { Eye, EyeOff, KeyRound, Check } from "lucide-react";
-import { changePasswordAction, type PasswordState } from "./actions";
+import { authClient } from "@/lib/auth/client";
 
-const initial: PasswordState = { error: null, fieldErrors: {}, success: false };
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <button type="submit" disabled={pending} className="btn-primary">
-      <KeyRound className="h-4 w-4" />
-      {pending ? "Updating…" : "Update password"}
-    </button>
-  );
-}
+type FieldErrors = Record<string, string>;
 
 export function PasswordForm() {
-  const [state, formAction] = useFormState(changePasswordAction, initial);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [pending, setPending] = useState(false);
   const [revealCurrent, setRevealCurrent] = useState(false);
   const [revealNew, setRevealNew] = useState(false);
 
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setFieldErrors({});
+    setSuccess(false);
+
+    const form = new FormData(e.currentTarget);
+    const current = String(form.get("current_password") ?? "");
+    const next = String(form.get("new_password") ?? "");
+    const confirm = String(form.get("confirm_password") ?? "");
+
+    const fe: FieldErrors = {};
+    if (next.length < 8) fe.new_password = "Password must be at least 8 characters.";
+    if (next !== confirm) fe.confirm_password = "Passwords don't match.";
+    if (current && next && current === next)
+      fe.new_password = "New password must be different from your current one.";
+    if (Object.keys(fe).length) {
+      setFieldErrors(fe);
+      return;
+    }
+
+    setPending(true);
+    const { error: changeError } = await authClient.changePassword({
+      currentPassword: current,
+      newPassword: next,
+    });
+    setPending(false);
+
+    if (changeError) {
+      // Better Auth returns INVALID_PASSWORD when the current password is wrong.
+      if (changeError.code === "INVALID_PASSWORD") {
+        setFieldErrors({ current_password: "Current password is incorrect." });
+      } else {
+        setError(changeError.message ?? "Could not update password.");
+      }
+      return;
+    }
+
+    setSuccess(true);
+    (e.target as HTMLFormElement).reset();
+  }
+
   return (
-    <form action={formAction} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <PasswordField
         id="current_password"
         label="Current password"
         autoComplete="current-password"
         reveal={revealCurrent}
         onToggleReveal={() => setRevealCurrent((v) => !v)}
-        error={state.fieldErrors.current_password}
+        error={fieldErrors.current_password}
       />
       <PasswordField
         id="new_password"
@@ -39,7 +73,7 @@ export function PasswordForm() {
         reveal={revealNew}
         onToggleReveal={() => setRevealNew((v) => !v)}
         hint="At least 8 characters."
-        error={state.fieldErrors.new_password}
+        error={fieldErrors.new_password}
       />
       <PasswordField
         id="confirm_password"
@@ -47,23 +81,26 @@ export function PasswordForm() {
         autoComplete="new-password"
         reveal={revealNew}
         onToggleReveal={() => setRevealNew((v) => !v)}
-        error={state.fieldErrors.confirm_password}
+        error={fieldErrors.confirm_password}
       />
 
-      {state.error ? (
+      {error ? (
         <p className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
-          {state.error}
+          {error}
         </p>
       ) : null}
 
-      {state.success ? (
+      {success ? (
         <p className="inline-flex items-center gap-2 rounded-md bg-success-soft px-3 py-2 text-sm text-success">
           <Check className="h-4 w-4" />
           Password updated. Your next sign-in will use the new one.
         </p>
       ) : null}
 
-      <SubmitButton />
+      <button type="submit" disabled={pending} className="btn-primary">
+        <KeyRound className="h-4 w-4" />
+        {pending ? "Updating…" : "Update password"}
+      </button>
     </form>
   );
 }
