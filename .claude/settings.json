@@ -5,7 +5,17 @@
       "Bash(git -C /Users/grddor/Documents/classcadence status --short)",
       "Bash(git -C /Users/grddor/Documents/classcadence commit -m ' *)",
       "Bash(npx tsc *)",
-      "Bash(git commit -q -m ' *)"
+      "Bash(git commit -q -m ' *)",
+      "Bash(curl -s -o /dev/null -w \" http=%{http_code} cache=%{header_json}\\\\n\" --max-time 15 https://tryclasscadence.com)",
+      "Bash(sed 's/{.*}//')",
+      "Bash(curl -s -o /tmp/p.json -w \" http=%{http_code}\\\\n\" --max-time 15 -X POST https://tryclasscadence.com/api/auth/sign-in/email -H \"Content-Type: application/json\" -d '{\"email\":\"x@x.com\",\"password\":\"wrong\"}')",
+      "Bash(curl -s -b \"dummy\" https://tryclasscadence.com/tenant --max-redirs 0)",
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(node -e \"const ba=require\\('./node_modules/better-auth/package.json'\\); console.log\\('better-auth', ba.version\\)\")",
+      "Bash(node scripts/reset-superadmin.mjs)",
+      "Bash(pkill -f \"next start\")",
+      "Bash(git commit -q -m 'Add super-admin password reset script \\(account was created without a password\\) *)",
+      "Bash(curl -s -o /dev/null -w \"home http=%{http_code}\\\\n\" --max-time 15 https://tryclasscadence.com)"
     ]
   }
 }
