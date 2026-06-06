@@ -20,6 +20,7 @@ const BASE_NAV: SideNavItem[] = [
   { href: "/tenant/schedule", label: "Schedule", icon: "schedule" },
   { href: "/tenant/students", label: "Students", icon: "students" },
   { href: "/tenant/makeups", label: "Make-ups", icon: "makeups" },
+  { href: "/tenant/reports", label: "Reports", icon: "reports" },
   { href: "/tenant/locations", label: "Locations", icon: "locations" },
 ];
 

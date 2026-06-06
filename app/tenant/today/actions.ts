@@ -13,6 +13,7 @@ import {
   attendanceRecords,
   enrollments,
   lessonNotes,
+  students,
 } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import {
@@ -283,4 +284,85 @@ export async function checkInAllExpectedAction(formData: FormData) {
   }
 
   revalidatePath("/tenant/today");
+}
+
+// ============ Manual check-in (walk-ins) ============
+
+const ManualCheckInSchema = z.object({
+  student_id: z.string().uuid("Pick a student."),
+  session_id: z.string().uuid("Pick a class."),
+});
+
+export type ManualCheckInState = { error: string | null; success: boolean };
+
+// Add a student to one of today's existing sessions and immediately mark them
+// present. Used when someone walks in who isn't on the roster for that class.
+// Upserts on the (session_id, student_id) unique index, so re-running just
+// refreshes the check-in time.
+export async function manualCheckInAction(
+  _prev: ManualCheckInState,
+  formData: FormData
+): Promise<ManualCheckInState> {
+  const user = await getCurrentUserOrRedirect();
+  if (!canWriteAttendance(user.role)) {
+    return { error: "Not allowed.", success: false };
+  }
+  if (!user.tenantId) {
+    return { error: "No tenant in scope.", success: false };
+  }
+
+  const parsed = ManualCheckInSchema.safeParse({
+    student_id: formData.get("student_id"),
+    session_id: formData.get("session_id"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input.", success: false };
+  }
+  const { student_id, session_id } = parsed.data;
+
+  // Confirm both the session and the student belong to this tenant before
+  // inserting (app-level tenant isolation, same as /api/attendance).
+  const [sessionOwner] = await db
+    .select({ tenantId: locations.tenantId })
+    .from(sessions)
+    .innerJoin(timeSlots, eq(timeSlots.id, sessions.timeSlotId))
+    .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+    .innerJoin(locations, eq(locations.id, classrooms.locationId))
+    .where(eq(sessions.id, session_id))
+    .limit(1);
+  if (!sessionOwner || sessionOwner.tenantId !== user.tenantId) {
+    return { error: "That class isn't part of your center.", success: false };
+  }
+
+  const [student] = await db
+    .select({ tenantId: students.tenantId })
+    .from(students)
+    .where(eq(students.id, student_id))
+    .limit(1);
+  if (!student || student.tenantId !== user.tenantId) {
+    return { error: "That student isn't part of your center.", success: false };
+  }
+
+  try {
+    await db
+      .insert(attendanceRecords)
+      .values({
+        sessionId: session_id,
+        studentId: student_id,
+        status: "present",
+        checkInAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: [attendanceRecords.sessionId, attendanceRecords.studentId],
+        set: { status: "present", checkInAt: new Date() },
+      });
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Failed to check in.",
+      success: false,
+    };
+  }
+
+  revalidatePath("/tenant/today");
+  return { error: null, success: true };
 }

@@ -2,7 +2,13 @@ import { Fragment } from "react";
 import { CalendarDays, CheckCheck } from "lucide-react";
 import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { locations as locationsTable, sessions } from "@/lib/db/schema";
+import {
+  locations as locationsTable,
+  sessions,
+  timeSlots,
+  classrooms,
+  students as studentsTable,
+} from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import {
   formatTimeInTimezone,
@@ -13,6 +19,7 @@ import { checkInAllExpectedAction } from "./actions";
 import { loadSessionsInWindow } from "./load-sessions";
 import { StudentTableRow, StudentCard } from "./StudentRowClient";
 import { LessonNoteWidget } from "./LessonNoteWidget";
+import { ManualCheckIn } from "./ManualCheckIn";
 
 export const metadata = { title: "Today — ClassCadence" };
 export const dynamic = "force-dynamic";
@@ -173,6 +180,53 @@ export default async function TodayPage({
       );
     });
 
+  // For the manual check-in picker: every active student in the tenant, and
+  // every session scheduled today (including ones with no roster yet, which
+  // loadSessionsInWindow skips). Parallel since neither depends on the other.
+  const [activeStudents, todaySessionOptions] = await Promise.all([
+    db
+      .select({
+        id: studentsTable.id,
+        firstName: studentsTable.firstName,
+        lastName: studentsTable.lastName,
+      })
+      .from(studentsTable)
+      .where(
+        and(
+          eq(studentsTable.tenantId, tenantId),
+          eq(studentsTable.lifecycleStatus, "active")
+        )
+      )
+      .orderBy(asc(studentsTable.lastName), asc(studentsTable.firstName)),
+    db
+      .select({
+        id: sessions.id,
+        startUtc: sessions.scheduledStartUtc,
+        tz: locationsTable.ianaTimezone,
+        classroomName: classrooms.name,
+      })
+      .from(sessions)
+      .innerJoin(timeSlots, eq(timeSlots.id, sessions.timeSlotId))
+      .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+      .innerJoin(locationsTable, eq(locationsTable.id, classrooms.locationId))
+      .where(
+        and(
+          eq(locationsTable.tenantId, tenantId),
+          gte(sessions.scheduledStartUtc, new Date(startUtc)),
+          lte(sessions.scheduledStartUtc, new Date(endUtc))
+        )
+      )
+      .orderBy(asc(sessions.scheduledStartUtc)),
+  ]);
+
+  const manualSessionOptions = todaySessionOptions.map((s) => ({
+    id: s.id,
+    label: `${formatTimeInTimezone(
+      s.startUtc.toISOString(),
+      s.tz ?? primaryTz
+    )} · ${s.classroomName}`,
+  }));
+
   // Group rows by session for the "check in all" header bar.
   const sessionMeta = new Map<
     string,
@@ -189,18 +243,24 @@ export default async function TodayPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-ink">Today</h1>
-        <p className="mt-1 text-sm text-muted">
-          {new Intl.DateTimeFormat("en-US", {
-            timeZone: primaryTz,
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          }).format(new Date())}
-          {primaryLocation ? ` · ${primaryLocation.name}` : ""}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-ink">Today</h1>
+          <p className="mt-1 text-sm text-muted">
+            {new Intl.DateTimeFormat("en-US", {
+              timeZone: primaryTz,
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            }).format(new Date())}
+            {primaryLocation ? ` · ${primaryLocation.name}` : ""}
+          </p>
+        </div>
+        <ManualCheckIn
+          students={activeStudents}
+          sessions={manualSessionOptions}
+        />
       </div>
 
       {sessionRows.length > 0 ? (

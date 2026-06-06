@@ -13,6 +13,7 @@ import {
 import { StudentAvatar } from "@/app/_components/StudentAvatar";
 import { StatusBadge } from "@/app/_components/StatusIcon";
 import { LiveTimer } from "@/app/_components/LiveTimer";
+import { offerMakeupAction } from "./makeup-actions";
 
 type Action =
   | "check_in"
@@ -146,9 +147,15 @@ function ActionButton({
 function ActionButtons({
   state,
   dispatch,
+  attendanceId,
+  studentName,
+  onAfterAbsentOrExcuse,
 }: {
   state: RowState;
   dispatch: (a: Action) => void;
+  attendanceId: string;
+  studentName: string;
+  onAfterAbsentOrExcuse: () => void;
 }) {
   const checkedIn = !!state.checkInAt;
   const checkedOut = !!state.checkOutAt;
@@ -161,14 +168,113 @@ function ActionButtons({
         <ActionButton action="check_out" onClick={() => dispatch("check_out")} />
       ) : null}
       {state.status === "expected" || state.status === "late" ? (
-        <ActionButton action="mark_absent" onClick={() => dispatch("mark_absent")} />
+        <ActionButton
+          action="mark_absent"
+          onClick={() => {
+            dispatch("mark_absent");
+            onAfterAbsentOrExcuse();
+          }}
+        />
       ) : null}
       {state.status !== "excused" ? (
-        <ActionButton action="mark_excused" onClick={() => dispatch("mark_excused")} />
+        <ActionButton
+          action="mark_excused"
+          onClick={() => {
+            dispatch("mark_excused");
+            onAfterAbsentOrExcuse();
+          }}
+        />
+      ) : null}
+      {state.status === "absent" ? (
+        <OfferMakeupForm attendanceId={attendanceId}>
+          <button
+            type="submit"
+            className="inline-flex min-h-[38px] items-center gap-1.5 rounded-md border border-primary/30 bg-primary-soft px-3 py-2 text-sm font-medium text-primary-strong transition hover:bg-primary-soft/70 hover:-translate-y-px active:translate-y-0"
+            title={`Offer a make-up class to ${studentName}`}
+          >
+            <Sparkles className="h-4 w-4" />
+            Make-up
+          </button>
+        </OfferMakeupForm>
       ) : null}
       {state.status !== "expected" ? (
         <ActionButton action="reset" onClick={() => dispatch("reset")} />
       ) : null}
+    </div>
+  );
+}
+
+// Posts the existing offerMakeupAction (auto-picks the next session in the same
+// time slot, emails the parent, redirects to the make-ups hub). Used both by the
+// persistent "Make-up" button and the post-absence prompt below.
+function OfferMakeupForm({
+  attendanceId,
+  children,
+}: {
+  attendanceId: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <form action={offerMakeupAction} className="inline-flex">
+      <input type="hidden" name="attendance_id" value={attendanceId} />
+      {children}
+    </form>
+  );
+}
+
+// Lightweight prompt shown right after a student is marked absent/excused,
+// nudging the front desk to schedule a make-up while it's top of mind.
+function MakeupPrompt({
+  studentName,
+  attendanceId,
+  onClose,
+}: {
+  studentName: string;
+  attendanceId: string;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-lg border border-line bg-surface p-5 shadow-card"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft text-primary-strong">
+            <Sparkles className="h-5 w-5" />
+          </span>
+          <div>
+            <h3 className="text-sm font-semibold text-ink">
+              Offer a make-up class?
+            </h3>
+            <p className="mt-1 text-xs text-muted">
+              {studentName} missed today&apos;s class. Offer the next available
+              session in the same time slot — we&apos;ll email the parent a link
+              to confirm.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn-secondary !px-3 !py-1.5"
+          >
+            Not now
+          </button>
+          <OfferMakeupForm attendanceId={attendanceId}>
+            <button type="submit" className="btn-primary !px-3 !py-1.5">
+              <Sparkles className="h-3.5 w-3.5" />
+              Offer make-up
+            </button>
+          </OfferMakeupForm>
+        </div>
+      </div>
     </div>
   );
 }
@@ -205,6 +311,8 @@ export function StudentTableRow(props: StudentRowProps) {
     },
     props.attendanceId
   );
+  const [showMakeupPrompt, setShowMakeupPrompt] = useState(false);
+  const studentName = `${props.firstName} ${props.lastName}`.trim();
 
   return (
     <tr className="transition hover:bg-primary-soft/20">
@@ -256,7 +364,13 @@ export function StudentTableRow(props: StudentRowProps) {
       </td>
       <td className="px-4 py-3.5 text-right">
         <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
-          <ActionButtons state={state} dispatch={dispatch} />
+          <ActionButtons
+            state={state}
+            dispatch={dispatch}
+            attendanceId={props.attendanceId}
+            studentName={studentName}
+            onAfterAbsentOrExcuse={() => setShowMakeupPrompt(true)}
+          />
           {props.notes.length > 0 ? (
             <span
               className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2 py-1 text-[10px] text-muted"
@@ -267,6 +381,13 @@ export function StudentTableRow(props: StudentRowProps) {
             </span>
           ) : null}
         </div>
+        {showMakeupPrompt ? (
+          <MakeupPrompt
+            studentName={studentName}
+            attendanceId={props.attendanceId}
+            onClose={() => setShowMakeupPrompt(false)}
+          />
+        ) : null}
       </td>
     </tr>
   );
@@ -281,6 +402,8 @@ export function StudentCard(props: StudentRowProps) {
     },
     props.attendanceId
   );
+  const [showMakeupPrompt, setShowMakeupPrompt] = useState(false);
+  const studentName = `${props.firstName} ${props.lastName}`.trim();
 
   return (
     <li
@@ -313,8 +436,21 @@ export function StudentCard(props: StudentRowProps) {
         <StatusBadge status={state.status} />
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        <ActionButtons state={state} dispatch={dispatch} />
+        <ActionButtons
+          state={state}
+          dispatch={dispatch}
+          attendanceId={props.attendanceId}
+          studentName={studentName}
+          onAfterAbsentOrExcuse={() => setShowMakeupPrompt(true)}
+        />
       </div>
+      {showMakeupPrompt ? (
+        <MakeupPrompt
+          studentName={studentName}
+          attendanceId={props.attendanceId}
+          onClose={() => setShowMakeupPrompt(false)}
+        />
+      ) : null}
     </li>
   );
 }

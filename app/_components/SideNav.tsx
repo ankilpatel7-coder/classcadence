@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BarChart3,
   CalendarCheck2,
   CalendarRange,
   Cog,
@@ -22,6 +23,7 @@ const ICONS: Record<string, LucideIcon> = {
   schedule: CalendarRange,
   students: GraduationCap,
   makeups: Sparkles,
+  reports: BarChart3,
   locations: MapPin,
   staff: Users,
   settings: Cog,

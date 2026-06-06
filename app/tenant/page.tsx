@@ -31,6 +31,8 @@ import { SendRemindersButton } from "@/app/_components/dashboard/SendRemindersBu
 import { StudentAvatar } from "@/app/_components/StudentAvatar";
 import { localToUtc, todayInTimezone } from "@/lib/time";
 import { loadSessionsInWindow } from "@/app/tenant/today/load-sessions";
+import { resolveRange } from "@/lib/reports/range";
+import { RangePicker } from "./RangePicker";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Dashboard — ClassCadence" };
@@ -58,14 +60,30 @@ type AbsenceRow = {
 export default async function TenantHomePage({
   searchParams,
 }: {
-  searchParams: { reminders_sent?: string; reminders_skipped?: string; error?: string };
+  searchParams: {
+    reminders_sent?: string;
+    reminders_skipped?: string;
+    error?: string;
+    range?: string;
+    from?: string;
+    to?: string;
+  };
 }) {
   const user = await getCurrentUserOrRedirect();
   const tenantId = user.tenantId!;
 
   const now = new Date();
   const fourWeeksAgo = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000);
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  // Selected reporting window (weekly/monthly/90d/ytd/custom). Drives the
+  // attendance ring, the absences tile, and the recent-absences list. The
+  // weekly bars keep their own fixed 4-week lookback.
+  const range = resolveRange(searchParams);
+  const rangeStart = range.start;
+  // Widen the attendance pull to cover BOTH the 4-week bars and the selected
+  // range, whichever reaches further back.
+  const attendanceQueryStart =
+    rangeStart < fourWeeksAgo ? rangeStart : fourWeeksAgo;
 
   // Locations first — we need the primary timezone to define "today" the same
   // way the Today page does, and we short-circuit to onboarding if there are
@@ -184,11 +202,11 @@ export default async function TenantHomePage({
         .where(
           and(
             eq(students.tenantId, tenantId),
-            gte(sessions.scheduledStartUtc, fourWeeksAgo),
+            gte(sessions.scheduledStartUtc, attendanceQueryStart),
             lte(sessions.scheduledStartUtc, now)
           )
         )
-        .limit(20000)
+        .limit(50000)
     ),
 
     // Pending make-ups — match the Makeups page, which counts by state alone
@@ -231,7 +249,7 @@ export default async function TenantHomePage({
           and(
             eq(students.tenantId, tenantId),
             eq(attendanceRecords.status, "absent"),
-            gte(sessions.scheduledStartUtc, sevenDaysAgo)
+            gte(sessions.scheduledStartUtc, rangeStart)
           )
         )
         .orderBy(desc(sessions.scheduledStartUtc))
@@ -262,20 +280,20 @@ export default async function TenantHomePage({
     status: a.status,
     sessions: { scheduled_start_utc: a.scheduled_start_utc.toISOString() },
   }));
-  const last7d = attRows.filter(
+  const inRange = attRows.filter(
     (a) =>
       a.sessions &&
-      new Date(a.sessions.scheduled_start_utc) >= sevenDaysAgo &&
-      new Date(a.sessions.scheduled_start_utc) <= now
+      new Date(a.sessions.scheduled_start_utc) >= rangeStart &&
+      new Date(a.sessions.scheduled_start_utc) <= range.end
   );
-  const last7dPresent = last7d.filter(
+  const rangePresent = inRange.filter(
     (a) => a.status === "present" || a.status === "late"
   ).length;
-  const last7dAbsent = last7d.filter((a) => a.status === "absent").length;
-  const last7dDecided = last7dPresent + last7dAbsent;
+  const rangeAbsent = inRange.filter((a) => a.status === "absent").length;
+  const rangeDecided = rangePresent + rangeAbsent;
   const attendanceRatio =
-    last7dDecided > 0
-      ? Math.round((last7dPresent / last7dDecided) * 100)
+    rangeDecided > 0
+      ? Math.round((rangePresent / rangeDecided) * 100)
       : 0;
 
   // Bucket attendance into the last 4 calendar weeks.
@@ -302,7 +320,14 @@ export default async function TenantHomePage({
 
   return (
     <div className="space-y-5">
-      <Header user={user} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Header user={user} />
+        <RangePicker
+          current={range.key}
+          from={range.from}
+          to={range.to}
+        />
+      </div>
 
       {dashboardError ? (
         <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
@@ -349,8 +374,8 @@ export default async function TenantHomePage({
           href="/tenant/makeups"
         />
         <KpiTile
-          label="Absences (7d)"
-          value={last7dAbsent}
+          label="Absences"
+          value={rangeAbsent}
           icon={UserMinus}
           tone="danger"
         />
@@ -360,13 +385,13 @@ export default async function TenantHomePage({
       <div className="grid gap-3 lg:grid-cols-3">
         {/* Ring */}
         <section className="panel relative overflow-hidden p-5">
-          <SectionHeader title="Attendance" hint="Last 7 days" />
+          <SectionHeader title="Attendance" hint={range.label} />
           <div className="mt-5 flex items-center justify-center">
             <AttendanceRing
               percent={attendanceRatio}
               caption={
-                last7dDecided > 0
-                  ? `${last7dPresent} of ${last7dDecided}`
+                rangeDecided > 0
+                  ? `${rangePresent} of ${rangeDecided}`
                   : "no data"
               }
             />
@@ -374,7 +399,7 @@ export default async function TenantHomePage({
           <div className="mt-5 grid grid-cols-2 gap-2 border-t border-line/60 pt-4 text-center">
             <div>
               <p className="text-xl font-bold tabular-nums text-success">
-                {last7dPresent}
+                {rangePresent}
               </p>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
                 Present
@@ -382,7 +407,7 @@ export default async function TenantHomePage({
             </div>
             <div>
               <p className="text-xl font-bold tabular-nums text-danger">
-                {last7dAbsent}
+                {rangeAbsent}
               </p>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
                 Absent
@@ -405,7 +430,7 @@ export default async function TenantHomePage({
         <section className="panel p-5 lg:col-span-2">
           <SectionHeader
             title="Recent absences"
-            hint="Last 7 days"
+            hint={range.label}
             action={
               <Link
                 href="/tenant/makeups"
@@ -418,7 +443,7 @@ export default async function TenantHomePage({
           />
           {absences.length === 0 ? (
             <div className="mt-4 rounded-md border border-dashed border-line bg-bg/30 px-4 py-8 text-center text-xs text-muted">
-              No absences in the last 7 days. ✨
+              No absences in this window. ✨
             </div>
           ) : (
             <ul className="mt-3 divide-y divide-line/60">

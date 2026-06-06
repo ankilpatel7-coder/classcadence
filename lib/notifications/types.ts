@@ -5,7 +5,8 @@
 export type NotificationType =
   | "enrollment_confirmed"
   | "student_absent"
-  | "class_reminder";
+  | "class_reminder"
+  | "student_pickup";
 
 export type EnrollmentConfirmedPayload = {
   student_id: string;
@@ -28,4 +29,12 @@ export type ClassReminderPayload = {
   date: string; // YYYY-MM-DD
   session_count: number;
   student_count: number;
+};
+
+export type StudentPickupPayload = {
+  student_id: string;
+  student_name: string;
+  classroom_name: string;
+  date: string; // YYYY-MM-DD in tenant tz
+  time: string; // "HH:MM"
 };

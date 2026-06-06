@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/schema";
 import { getServerSession } from "@/lib/auth/session";
 import { fireAbsentNotification } from "@/lib/notifications/absent-alert";
+import { firePickupNotification } from "@/lib/notifications/pickup-alert";
 
 // REST endpoint for per-row attendance updates. Lives outside the App
 // Router server-action pipeline so a burst of clicks does not chain
@@ -123,6 +124,13 @@ export async function POST(req: NextRequest) {
       tenantId: profile.tenantId,
       attendanceId: parsed.data.attendance_id,
     }).catch((err) => console.error("[absent] notification failed:", err));
+  }
+
+  if (parsed.data.action === "check_out" && profile.tenantId) {
+    firePickupNotification({
+      tenantId: profile.tenantId,
+      attendanceId: parsed.data.attendance_id,
+    }).catch((err) => console.error("[pickup] notification failed:", err));
   }
 
   return NextResponse.json({ ok: true });
