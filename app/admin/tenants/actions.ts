@@ -12,6 +12,8 @@ import {
   createNeonAuthUser,
   deleteNeonAuthUser,
   generateTempPassword,
+  setUserPassword,
+  type CreateUserResult,
 } from "@/lib/auth/admin";
 
 // Every action here is reachable only from the super_admin-guarded /admin
@@ -358,23 +360,70 @@ export async function createAdminWithPasswordAction(
     .limit(1);
   if (!tenant) return { error: "Tenant not found.", success: false };
 
-  const created = await createNeonAuthUser({ email, password, name: full_name ?? "" });
-  if (!created.ok) return { error: friendlyInviteError(created.error), success: false };
-
-  try {
-    await upsertTenantAdminProfile(created.id, email, full_name ?? null, tenant_id);
-  } catch (err) {
-    await deleteNeonAuthUser(created.id).catch(() => {});
-    return {
-      error: `Account created but profile update failed: ${
-        err instanceof Error ? err.message : "unknown error"
-      }`,
-      success: false,
-    };
-  }
+  const provisioned = await provisionTenantAdmin({
+    tenantId: tenant_id,
+    email,
+    fullName: full_name ?? null,
+    password,
+  });
+  if (!provisioned.ok) return { error: friendlyInviteError(provisioned.error), success: false };
 
   revalidatePath(`/admin/tenants/${tenant_id}/edit`);
   return { error: null, success: true, createdCredentials: { email, password } };
+}
+
+const ResetAdminPasswordSchema = z.object({
+  admin_id: z.string().uuid("Invalid admin id."),
+  tenant_id: z.string().uuid("Invalid tenant id."),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters.")
+    .max(72, "Password must be 72 characters or fewer."),
+});
+
+export type ResetPasswordState = {
+  error: string | null;
+  success: boolean;
+  credentials?: { email: string; password: string } | null;
+};
+
+// Set a brand-new password for an existing tenant/location admin. Works even
+// when the admin has no login yet (migrated profile) — setUserPassword binds a
+// fresh credential to their existing profile id.
+export async function resetAdminPasswordAction(
+  _prev: ResetPasswordState,
+  formData: FormData
+): Promise<ResetPasswordState> {
+  const user = await requireSuperAdmin();
+  if (!user) return { error: "Not signed in.", success: false };
+
+  const parsed = ResetAdminPasswordSchema.safeParse({
+    admin_id: formData.get("admin_id"),
+    tenant_id: formData.get("tenant_id"),
+    password: formData.get("password"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input.", success: false };
+  }
+  const { admin_id, tenant_id, password } = parsed.data;
+
+  const [profile] = await db
+    .select({ id: userProfiles.id, email: userProfiles.email, fullName: userProfiles.fullName })
+    .from(userProfiles)
+    .where(and(eq(userProfiles.id, admin_id), eq(userProfiles.tenantId, tenant_id)))
+    .limit(1);
+  if (!profile) return { error: "That admin isn't part of this tenant.", success: false };
+
+  const res = await setUserPassword({
+    userId: profile.id,
+    email: profile.email,
+    name: profile.fullName ?? "",
+    password,
+  });
+  if (!res.ok) return { error: res.error, success: false };
+
+  revalidatePath(`/admin/tenants/${tenant_id}/edit`);
+  return { error: null, success: true, credentials: { email: profile.email, password } };
 }
 
 export async function inviteAdminAction(
@@ -458,7 +507,56 @@ async function upsertTenantAdminProfile(
     });
 }
 
-// Create a tenant_admin with a generated temp password and email it via
+// Ensure a tenant_admin login exists for `email` in this tenant with the given
+// password, returning its user id. If a profile already exists for the email
+// (e.g. a migrated account with no login, or a re-invite), we relink it in
+// place — binding the credential to the existing profile id keeps all authored
+// data attached and sidesteps the unique-email collision that used to surface
+// as "a user with that email already exists". Otherwise we create fresh.
+async function provisionTenantAdmin(args: {
+  tenantId: string;
+  email: string;
+  fullName: string | null;
+  password: string;
+}): Promise<CreateUserResult> {
+  const [existing] = await db
+    .select({ id: userProfiles.id, fullName: userProfiles.fullName })
+    .from(userProfiles)
+    .where(eq(userProfiles.email, args.email))
+    .limit(1);
+
+  if (existing) {
+    const name = args.fullName ?? existing.fullName ?? "";
+    const res = await setUserPassword({
+      userId: existing.id,
+      email: args.email,
+      name,
+      password: args.password,
+    });
+    if (!res.ok) return res;
+    await db
+      .update(userProfiles)
+      .set({ role: "tenant_admin", tenantId: args.tenantId, fullName: args.fullName ?? existing.fullName ?? null })
+      .where(eq(userProfiles.id, existing.id));
+    return { ok: true, id: existing.id };
+  }
+
+  const created = await createNeonAuthUser({
+    email: args.email,
+    password: args.password,
+    name: args.fullName ?? "",
+  });
+  if (!created.ok) return created;
+  try {
+    await upsertTenantAdminProfile(created.id, args.email, args.fullName, args.tenantId);
+  } catch (err) {
+    await deleteNeonAuthUser(created.id).catch(() => {});
+    return { ok: false, error: err instanceof Error ? err.message : "Profile setup failed." };
+  }
+  return { ok: true, id: created.id };
+}
+
+// Create/relink a tenant_admin with a generated temp password and email it via
 // Resend. Returns the temp password so the caller can also surface it on
 // screen (reliable fallback when email is unavailable).
 async function inviteTenantAdmin(args: {
@@ -470,24 +568,13 @@ async function inviteTenantAdmin(args: {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const tempPassword = generateTempPassword();
 
-  const created = await createNeonAuthUser({
+  const provisioned = await provisionTenantAdmin({
+    tenantId: args.tenantId,
     email: args.email,
+    fullName: args.fullName ?? null,
     password: tempPassword,
-    name: args.fullName ?? "",
   });
-  if (!created.ok) throw new Error(created.error);
-
-  try {
-    await upsertTenantAdminProfile(
-      created.id,
-      args.email,
-      args.fullName ?? null,
-      args.tenantId
-    );
-  } catch (err) {
-    await deleteNeonAuthUser(created.id).catch(() => {});
-    throw err;
-  }
+  if (!provisioned.ok) throw new Error(provisioned.error);
 
   const resendKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.RESEND_FROM_EMAIL;
