@@ -27,7 +27,12 @@ export async function createNeonAuthUser(input: {
   try {
     res = await fetch(`${BASE_URL}/sign-up/email`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      // A trusted Origin header is required on direct server-to-service
+      // sign-up calls. Must be an allowed origin in Neon Auth config.
+      headers: {
+        "content-type": "application/json",
+        origin: process.env.NEXT_PUBLIC_APP_URL || "https://tryclasscadence.com",
+      },
       body: JSON.stringify(input),
       cache: "no-store",
     });
