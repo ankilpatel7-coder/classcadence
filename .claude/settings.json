@@ -57,7 +57,8 @@
       "Bash(rm -f scripts/_up.mjs)",
       "Bash(echo \"EXIT:$?\")",
       "Bash(npx next *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(vercel env *)"
     ]
   }
 }

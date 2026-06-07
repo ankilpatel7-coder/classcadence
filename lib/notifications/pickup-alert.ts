@@ -78,7 +78,7 @@ export async function firePickupNotification(args: {
     day: "numeric",
   });
 
-  await createNotification({
+  const res = await createNotification({
     tenantId: args.tenantId,
     type: "student_pickup",
     payload: {
@@ -110,6 +110,17 @@ export async function firePickupNotification(args: {
       }),
     },
   });
+
+  // Surface the outcome — a "skipped" (missing RESEND_* env) or "error"
+  // (e.g. unverified sending domain) is otherwise invisible since this runs
+  // fire-and-forget.
+  for (const r of res.emailResults) {
+    if (r.status !== "sent") {
+      console.error(`[pickup] email ${r.status} to ${r.to}: ${r.detail ?? ""}`);
+    } else {
+      console.log(`[pickup] email sent to ${r.to}`);
+    }
+  }
 }
 
 function buildPickupEmailText(args: {
