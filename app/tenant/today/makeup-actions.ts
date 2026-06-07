@@ -90,19 +90,54 @@ export async function offerMakeupAction(formData: FormData) {
     );
   }
 
-  // 3. Insert make-up offer with hashed token. 7-day expiry.
+  // 3. There can only be one offer per absence (absent_attendance_id is
+  //    unique). If one already exists: a parent who already ACCEPTED has a
+  //    scheduled make-up — don't clobber it. Otherwise (pending / declined /
+  //    expired) re-offering is fine: we overwrite the old row with a fresh
+  //    token + session below, which also re-sends the link.
+  const [existingOffer] = await db
+    .select({ state: makeupOffers.state })
+    .from(makeupOffers)
+    .where(eq(makeupOffers.absentAttendanceId, r!.id))
+    .limit(1);
+
+  if (existingOffer?.state === "accepted") {
+    redirect(
+      "/tenant/makeups?error=" +
+        encodeURIComponent(
+          "A make-up has already been scheduled for this absence."
+        )
+    );
+  }
+
+  // 4. Upsert the make-up offer with a fresh hashed token. 7-day expiry.
+  //    On conflict (same absence) we reset it back to a fresh pending offer.
   const { raw, hash } = newToken();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
   try {
-    await db.insert(makeupOffers).values({
-      absentAttendanceId: r!.id,
-      offeredSessionId: nextSession!.id,
-      state: "pending",
-      tokenHash: hash,
-      offeredBy: user.id,
-      expiresAt,
-    });
+    await db
+      .insert(makeupOffers)
+      .values({
+        absentAttendanceId: r!.id,
+        offeredSessionId: nextSession!.id,
+        state: "pending",
+        tokenHash: hash,
+        offeredBy: user.id,
+        expiresAt,
+      })
+      .onConflictDoUpdate({
+        target: makeupOffers.absentAttendanceId,
+        set: {
+          offeredSessionId: nextSession!.id,
+          state: "pending",
+          tokenHash: hash,
+          offeredBy: user.id,
+          offeredAt: now,
+          respondedAt: null,
+          expiresAt,
+        },
+      });
   } catch (err) {
     redirect(
       "/tenant/today?error=" +
