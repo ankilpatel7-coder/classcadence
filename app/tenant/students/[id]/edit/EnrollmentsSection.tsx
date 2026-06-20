@@ -8,6 +8,7 @@ import {
   endEnrollmentAction,
   type EnrollState,
 } from "../../actions";
+import { formatTime12h } from "@/lib/time";
 
 export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
@@ -186,7 +187,7 @@ export function EnrollmentsSection({
                       {weekdayFull(e.weekday)}
                     </span>{" "}
                     <span className="font-mono tabular-nums font-medium">
-                      {e.start_time}–{e.end_time}
+                      {formatTime12h(e.start_time)}–{formatTime12h(e.end_time)}
                     </span>
                     <span className="text-muted"> · </span>
                     <span className="text-ink/80">{e.classroom_name}</span>
@@ -197,7 +198,7 @@ export function EnrollmentsSection({
                   <input type="hidden" name="id" value={e.enrollment_id} />
                   <input type="hidden" name="student_id" value={studentId} />
                   <RemoveButton
-                    label={`${weekdayFull(e.weekday)} ${e.start_time}, ${e.classroom_name}`}
+                    label={`${weekdayFull(e.weekday)} ${formatTime12h(e.start_time)}, ${e.classroom_name}`}
                   />
                 </form>
               </li>
@@ -309,7 +310,7 @@ export function EnrollmentsSection({
                               value={slot.id}
                             />
                             <EnrollSubmit
-                              label={`${slot.start_time} (${slot.enrolled_count}/${slot.capacity})`}
+                              label={`${formatTime12h(slot.start_time)} (${slot.enrolled_count}/${slot.capacity})`}
                             />
                           </form>
                         ))}

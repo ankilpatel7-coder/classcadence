@@ -13,6 +13,7 @@ import {
   timeSlots,
 } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
+import { formatTime12h } from "@/lib/time";
 import { materializeSessions } from "@/app/tenant/today/actions";
 
 // App-level tenant scoping helpers: the owner connection bypasses RLS, so we
@@ -372,7 +373,7 @@ export async function saveTimeSlotsAction(
       if (!slotFitsHours(s, hours)) {
         return {
           error:
-            `${s.weekday.toUpperCase()} ${s.start_time}–${s.end_time} is ` +
+            `${s.weekday.toUpperCase()} ${formatTime12h(s.start_time)}–${formatTime12h(s.end_time)} is ` +
             `outside the location's operating hours for that day.`,
           success: false,
         };

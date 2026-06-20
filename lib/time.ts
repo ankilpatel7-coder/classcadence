@@ -80,13 +80,23 @@ export function todayInTimezone(tz: string): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-// Format a UTC instant as HH:MM in a given timezone.
+// Format a UTC instant as 12-hour "h:MM AM/PM" in a given timezone.
 export function formatTimeInTimezone(utc: string | Date, tz: string): string {
   const d = typeof utc === "string" ? new Date(utc) : utc;
   return new Intl.DateTimeFormat("en-US", {
     timeZone: tz,
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
-    hour12: false,
+    hour12: true,
   }).format(d);
+}
+
+// Convert a 24-hour "HH:MM" string to 12-hour "h:MM AM/PM".
+export function formatTime12h(hhmm: string): string {
+  const [hStr, mStr] = hhmm.slice(0, 5).split(":");
+  const h = Number(hStr);
+  const m = mStr ?? "00";
+  const period = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${m} ${period}`;
 }

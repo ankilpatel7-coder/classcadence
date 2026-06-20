@@ -17,6 +17,7 @@ import {
 } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { materializeSessions } from "@/app/tenant/today/actions";
+import { formatTime12h } from "@/lib/time";
 import {
   createNotification,
   tenantAdminUserIds,
@@ -564,7 +565,7 @@ function buildEnrollmentEmailText(args: {
     "",
     `${args.studentName} is now enrolled at ${args.tenantName}:`,
     "",
-    `  • ${args.weekdayLabel} ${args.startTime} – ${args.endTime} — ${args.classroomName}`,
+    `  • ${args.weekdayLabel} ${formatTime12h(args.startTime)} – ${formatTime12h(args.endTime)} — ${args.classroomName}`,
     "",
     `See you ${args.weekdayLabel}!`,
     "",
@@ -589,7 +590,7 @@ function buildEnrollmentEmailHtml(args: {
   <div style="background:#FBFAF7;border:1px solid #E5E7EB;border-left:3px solid #1AA876;border-radius:6px;padding:12px 16px;margin:0 0 16px;">
     <p style="margin:0;font-size:14px;">
       <strong>${escapeHtml(args.weekdayLabel)}</strong>
-      &nbsp;<span style="font-family:ui-monospace,Menlo,monospace;font-weight:600;">${args.startTime} – ${args.endTime}</span>
+      &nbsp;<span style="font-family:ui-monospace,Menlo,monospace;font-weight:600;">${formatTime12h(args.startTime)} – ${formatTime12h(args.endTime)}</span>
     </p>
     <p style="margin:4px 0 0;font-size:13px;color:#6B7280;">${escapeHtml(args.classroomName)}</p>
   </div>

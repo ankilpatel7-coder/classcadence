@@ -281,8 +281,9 @@ function MakeupPrompt({
 
 function formatClockTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-US", {
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
+    hour12: true,
   });
 }
 

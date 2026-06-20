@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Users } from "lucide-react";
-import { formatTimeInTimezone } from "@/lib/time";
+import { formatTimeInTimezone, formatTime12h } from "@/lib/time";
 
 export type ScheduleSession = {
   id: string;
@@ -227,5 +227,7 @@ export function WeekCalendar({
 function fmt(t: number) {
   const h = Math.floor(t / 60);
   const m = t % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  return formatTime12h(
+    `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+  );
 }
