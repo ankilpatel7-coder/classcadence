@@ -19,7 +19,7 @@ import { firePickupNotification } from "@/lib/notifications/pickup-alert";
 // route-tree refreshes that block the next navigation.
 //
 // POST /api/attendance
-// body: { attendance_id: uuid, action: "check_in"|"check_out"|"mark_absent"|"mark_excused"|"reset" }
+// body: { attendance_id: uuid, action: "check_in"|"check_out"|"mark_absent"|"mark_excused"|"reset"|"notify_parent" }
 
 const BodySchema = z.object({
   attendance_id: z.string().uuid(),
@@ -29,6 +29,7 @@ const BodySchema = z.object({
     "mark_absent",
     "mark_excused",
     "reset",
+    "notify_parent",
   ]),
 });
 
@@ -87,6 +88,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
+  // Manual parent-pickup notification: send the email on demand and return.
+  // No attendance state change — this is purely the "Notify Parent" button.
+  if (parsed.data.action === "notify_parent") {
+    if (!profile.tenantId) {
+      return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+    }
+    try {
+      await firePickupNotification({
+        tenantId: profile.tenantId,
+        attendanceId: parsed.data.attendance_id,
+      });
+    } catch (err) {
+      console.error("[pickup] manual notification failed:", err);
+      return NextResponse.json(
+        { ok: false, error: "notify-failed" },
+        { status: 500 }
+      );
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   const now = new Date();
   let updates: Partial<typeof attendanceRecords.$inferInsert> = {};
   switch (parsed.data.action) {
@@ -124,13 +146,6 @@ export async function POST(req: NextRequest) {
       tenantId: profile.tenantId,
       attendanceId: parsed.data.attendance_id,
     }).catch((err) => console.error("[absent] notification failed:", err));
-  }
-
-  if (parsed.data.action === "check_out" && profile.tenantId) {
-    firePickupNotification({
-      tenantId: profile.tenantId,
-      attendanceId: parsed.data.attendance_id,
-    }).catch((err) => console.error("[pickup] notification failed:", err));
   }
 
   return NextResponse.json({ ok: true });

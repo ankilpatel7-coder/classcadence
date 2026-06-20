@@ -9,6 +9,7 @@ import {
   RotateCcw,
   Sparkles,
   StickyNote,
+  Mail,
 } from "lucide-react";
 import { StudentAvatar } from "@/app/_components/StudentAvatar";
 import { StatusBadge } from "@/app/_components/StatusIcon";
@@ -144,6 +145,67 @@ function ActionButton({
   );
 }
 
+// Manually emails the parent that the student is ready for pickup. Posts the
+// `notify_parent` action, which sends the email without touching attendance
+// state. (Pickup emails are no longer sent automatically on check-out.)
+function NotifyParentButton({ attendanceId }: { attendanceId: string }) {
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
+    "idle"
+  );
+
+  function notify() {
+    if (status === "sending") return;
+    setStatus("sending");
+    fetch("/api/attendance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attendance_id: attendanceId, action: "notify_parent" }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          console.error("[notify] send failed:", res.status, text);
+          setStatus("error");
+        } else {
+          setStatus("sent");
+        }
+      })
+      .catch((err) => {
+        console.error("[notify] send threw:", err);
+        setStatus("error");
+      });
+  }
+
+  const label =
+    status === "sending"
+      ? "Sending…"
+      : status === "sent"
+        ? "Parent notified"
+        : status === "error"
+          ? "Retry notify"
+          : "Notify parent";
+
+  const tone =
+    status === "sent"
+      ? "bg-success/10 text-success ring-1 ring-inset ring-success/20"
+      : status === "error"
+        ? "bg-danger/10 text-danger ring-1 ring-inset ring-danger/20 hover:bg-danger/15 hover:-translate-y-px active:translate-y-0"
+        : "bg-bg/80 text-ink/70 ring-1 ring-inset ring-line/70 hover:bg-bg hover:text-ink hover:-translate-y-px active:translate-y-0";
+
+  return (
+    <button
+      type="button"
+      onClick={notify}
+      disabled={status === "sending" || status === "sent"}
+      title="Email the parent that this student is ready for pickup"
+      className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition disabled:cursor-default disabled:opacity-80 ${tone}`}
+    >
+      <Mail className="h-4 w-4" />
+      {label}
+    </button>
+  );
+}
+
 function ActionButtons({
   state,
   dispatch,
@@ -167,6 +229,7 @@ function ActionButtons({
       {checkedIn && !checkedOut ? (
         <ActionButton action="check_out" onClick={() => dispatch("check_out")} />
       ) : null}
+      {checkedIn ? <NotifyParentButton attendanceId={attendanceId} /> : null}
       {state.status === "expected" || state.status === "late" ? (
         <ActionButton
           action="mark_absent"
