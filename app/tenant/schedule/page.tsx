@@ -7,6 +7,7 @@ import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import {
   formatTimeInTimezone,
   localToUtc,
+  minutesIntoDayInTimezone,
 } from "@/lib/time";
 import {
   WeekCalendar,
@@ -65,9 +66,7 @@ function buildDays(startKey: string, tz: string, todayKey: string): DayColumn[] 
 }
 
 function minutesIntoDay(utc: string, tz: string): number {
-  const t = formatTimeInTimezone(utc, tz);
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
+  return minutesIntoDayInTimezone(utc, tz);
 }
 
 function shiftKey(key: string, days: number): string {

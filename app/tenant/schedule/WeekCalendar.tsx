@@ -3,7 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Users } from "lucide-react";
-import { formatTimeInTimezone, formatTime12h } from "@/lib/time";
+import {
+  formatTimeInTimezone,
+  formatTime12h,
+  minutesIntoDayInTimezone,
+} from "@/lib/time";
 
 export type ScheduleSession = {
   id: string;
@@ -29,9 +33,7 @@ const ROW_PX = 48;
 const HEADER_PX = 4;
 
 function minutesIntoDay(utc: string, tz: string): number {
-  const t = formatTimeInTimezone(utc, tz);
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
+  return minutesIntoDayInTimezone(utc, tz);
 }
 
 // Strip the day number out of "May 22" so we can render it as the prominent

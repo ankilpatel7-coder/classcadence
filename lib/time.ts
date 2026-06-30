@@ -91,6 +91,22 @@ export function formatTimeInTimezone(utc: string | Date, tz: string): string {
   }).format(d);
 }
 
+// Minutes since local midnight (0–1439) for a UTC instant in a given timezone.
+// Independent of display formatting — use this for layout/axis math, never
+// formatTimeInTimezone (which returns a localized 12-hour string).
+export function minutesIntoDayInTimezone(utc: string | Date, tz: string): number {
+  const d = typeof utc === "string" ? new Date(utc) : utc;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (t: string) =>
+    Number(parts.find((p) => p.type === t)?.value ?? "0");
+  return (get("hour") % 24) * 60 + get("minute");
+}
+
 // Convert a 24-hour "HH:MM" string to 12-hour "h:MM AM/PM".
 export function formatTime12h(hhmm: string): string {
   const [hStr, mStr] = hhmm.slice(0, 5).split(":");
