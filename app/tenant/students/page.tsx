@@ -1,11 +1,14 @@
 import Link from "next/link";
-import { GraduationCap, Pencil, Plus } from "lucide-react";
-import { asc, eq } from "drizzle-orm";
+import { ChevronLeft, ChevronRight, GraduationCap, Pencil, Plus, SearchX } from "lucide-react";
+import { and, asc, count, eq, ilike, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { students, locations } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
+import { StudentSearch } from "./StudentSearch";
 
 export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 25;
 
 type Row = {
   id: string;
@@ -31,11 +34,46 @@ const STATUS_BADGE: Record<string, string> = {
 export default async function StudentsPage({
   searchParams,
 }: {
-  searchParams: { deleted?: string; error?: string };
+  searchParams: { deleted?: string; error?: string; q?: string; page?: string };
 }) {
   const user = await getCurrentUserOrRedirect();
 
-  // App-level tenant isolation: only this tenant's students.
+  const query = (searchParams.q ?? "").trim();
+  const requestedPage = Number.parseInt(searchParams.page ?? "1", 10);
+  const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+
+  // App-level tenant isolation: only this tenant's students. The search matches
+  // the name (either part, and the two joined so "jane doe" works) plus the
+  // parent contact fields, since that's how the front desk usually looks a
+  // student up.
+  const pattern = `%${query}%`;
+  const where = and(
+    eq(students.tenantId, user.tenantId!),
+    query
+      ? or(
+          ilike(students.firstName, pattern),
+          ilike(students.lastName, pattern),
+          ilike(sql`${students.firstName} || ' ' || ${students.lastName}`, pattern),
+          ilike(sql`${students.lastName} || ' ' || ${students.firstName}`, pattern),
+          ilike(students.primaryParentName, pattern),
+          sql`${students.primaryEmail}::text ILIKE ${pattern}`,
+          ilike(students.primaryPhone, pattern)
+        )
+      : undefined
+  );
+
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(students)
+    .innerJoin(locations, eq(locations.id, students.locationId))
+    .where(where);
+
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // Clamp so a stale ?page= past the end still renders the last page of results
+  // instead of an empty list.
+  const currentPage = Math.min(page, pageCount);
+  const offset = (currentPage - 1) * PAGE_SIZE;
+
   const rows: Row[] = await db
     .select({
       id: students.id,
@@ -50,8 +88,21 @@ export default async function StudentsPage({
     })
     .from(students)
     .innerJoin(locations, eq(locations.id, students.locationId))
-    .where(eq(students.tenantId, user.tenantId!))
-    .orderBy(asc(students.lastName), asc(students.firstName));
+    .where(where)
+    .orderBy(asc(students.lastName), asc(students.firstName))
+    .limit(PAGE_SIZE)
+    .offset(offset);
+
+  function pageHref(n: number) {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (n > 1) params.set("page", String(n));
+    const qs = params.toString();
+    return qs ? `/tenant/students?${qs}` : "/tenant/students";
+  }
+
+  const firstShown = total === 0 ? 0 : offset + 1;
+  const lastShown = offset + rows.length;
 
   return (
     <div className="space-y-6">
@@ -79,7 +130,33 @@ export default async function StudentsPage({
         </div>
       ) : null}
 
-      {rows.length === 0 ? (
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="sm:max-w-sm sm:flex-1">
+          <StudentSearch initialQuery={query} />
+        </div>
+        <p className="text-xs text-muted tabular-nums">
+          {total === 0
+            ? "No students"
+            : `Showing ${firstShown}–${lastShown} of ${total}${
+                query ? " matching" : ""
+              }`}
+        </p>
+      </div>
+
+      {total === 0 && query ? (
+        <div className="rounded-lg border border-dashed border-line bg-surface px-6 py-12 text-center">
+          <SearchX className="mx-auto h-6 w-6 text-muted" />
+          <p className="mt-3 text-sm text-muted">
+            No students match &ldquo;{query}&rdquo;.
+          </p>
+          <Link
+            href="/tenant/students"
+            className="mt-3 inline-block text-sm font-medium text-primary hover:underline"
+          >
+            Clear search
+          </Link>
+        </div>
+      ) : total === 0 ? (
         <div className="rounded-lg border border-dashed border-line bg-surface px-6 py-12 text-center">
           <GraduationCap className="mx-auto h-6 w-6 text-muted" />
           <p className="mt-3 text-sm text-muted">No students yet.</p>
@@ -126,6 +203,63 @@ export default async function StudentsPage({
           </ul>
         </div>
       )}
+
+      {pageCount > 1 ? (
+        <nav
+          aria-label="Students pagination"
+          className="flex items-center justify-between gap-3"
+        >
+          <PageLink
+            href={pageHref(currentPage - 1)}
+            disabled={currentPage <= 1}
+            rel="prev"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </PageLink>
+          <p className="text-xs text-muted tabular-nums">
+            Page {currentPage} of {pageCount}
+          </p>
+          <PageLink
+            href={pageHref(currentPage + 1)}
+            disabled={currentPage >= pageCount}
+            rel="next"
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </PageLink>
+        </nav>
+      ) : null}
     </div>
+  );
+}
+
+function PageLink({
+  href,
+  disabled,
+  rel,
+  children,
+}: {
+  href: string;
+  disabled: boolean;
+  rel: "prev" | "next";
+  children: React.ReactNode;
+}) {
+  const classes =
+    "inline-flex min-h-[38px] items-center gap-1.5 rounded-md border border-line bg-surface px-3 py-2 text-sm font-medium transition";
+  if (disabled) {
+    return (
+      <span
+        aria-disabled="true"
+        className={`${classes} cursor-default text-muted opacity-50`}
+      >
+        {children}
+      </span>
+    );
+  }
+  return (
+    <Link href={href} rel={rel} className={`${classes} text-ink hover:bg-bg/70`}>
+      {children}
+    </Link>
   );
 }
