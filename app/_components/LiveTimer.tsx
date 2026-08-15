@@ -35,14 +35,24 @@ export function LiveTimer({
 
   return (
     <span
-      className={`inline-flex items-center gap-2 rounded-full px-3 py-1 font-mono text-base font-bold tabular-nums shadow-emboss ring-2 ring-surface ${
-        until ? "bg-bg text-muted" : "bg-success-soft text-success"
+      className={`inline-flex items-center gap-2.5 rounded-xl px-3.5 py-2 font-mono text-2xl font-extrabold leading-none tabular-nums shadow-emboss ring-2 ring-surface md:px-4 md:text-3xl ${
+        until ? "bg-bg text-muted" : "text-white"
       }`}
+      // Matches the Check in button's gradient so a running timer reads as the
+      // same "live / present" green.
+      style={
+        until
+          ? undefined
+          : {
+              backgroundImage:
+                "linear-gradient(180deg, #2BC98A 0%, #16A34A 55%, #0B6845 100%)",
+            }
+      }
       title={until ? "Session length" : "Time since check-in"}
     >
       <span
-        className={`inline-block h-2 w-2 rounded-full ${
-          until ? "bg-muted" : "bg-success animate-pulse"
+        className={`inline-block h-2.5 w-2.5 rounded-full ${
+          until ? "bg-muted" : "animate-pulse bg-white/90"
         }`}
       />
       {display}

@@ -26,18 +26,23 @@ export function sessionLengthMs(row: TodayRow): number {
   return new Date(row.endUtc).getTime() - new Date(row.startUtc).getTime();
 }
 
-// Milliseconds a checked-in student has been in past their session length, or
-// null if they aren't over (or aren't eligible: only students who are checked
-// in and not yet checked out can run over).
-export function overdueBy(
+// How early a student joins the pinned board, ahead of their due time.
+export const DUE_SOON_MS = 5 * 60 * 1000;
+
+// Milliseconds until this student reaches their session length — their
+// "supposed check-out time". Goes negative once they're past it, so sorting
+// ascending puts the most overdue first, then whoever is closest to due.
+//
+// null means not eligible: only students who are checked in and not yet
+// checked out have a due time.
+export function msUntilDue(
   row: TodayRow,
   state: { checkInAt: string | null; checkOutAt: string | null },
   now: number
 ): number | null {
-  if (!state.checkInAt || state.checkOutAt) return null;
-  const over =
-    now - new Date(state.checkInAt).getTime() - sessionLengthMs(row);
-  return over >= 0 ? over : null;
+  if (!state.checkInAt) return null;
+  if (state.checkOutAt) return null;
+  return new Date(state.checkInAt).getTime() + sessionLengthMs(row) - now;
 }
 
 export function formatDuration(ms: number): string {

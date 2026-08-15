@@ -11,18 +11,18 @@ import {
   type RowState,
 } from "./StudentRowClient";
 import { LessonNoteWidget } from "./LessonNoteWidget";
-import { OverdueBoard, type OverdueEntry } from "./OverdueBoard";
-import { overdueBy, type TodayRow } from "./types";
+import { DueBoard, type DueEntry } from "./DueBoard";
+import { DUE_SOON_MS, msUntilDue, type TodayRow } from "./types";
 
-// The overdue check only needs minute-ish resolution; the per-student "over by"
-// counters do their own 1s tick, so re-rendering the whole list every second
-// would be waste.
+// Board membership only needs coarse resolution (a 5-minute threshold); the
+// per-student counters do their own 1s tick, so re-rendering the whole list
+// every second would be waste.
 const TICK_MS = 5_000;
 
 export function TodayList({ rows }: { rows: TodayRow[] }) {
-  // Attendance state is lifted here (rather than per-row) so the "Time's up"
-  // board and the table below read the same source — checking a student out
-  // has to drop them off the board immediately.
+  // Attendance state is lifted here (rather than per-row) so the pinned board
+  // and the table below read the same source — checking a student out has to
+  // drop them off the board immediately.
   const [states, setStates] = useState<Record<string, RowState>>(() =>
     Object.fromEntries(
       rows.map((r) => [
@@ -32,8 +32,8 @@ export function TodayList({ rows }: { rows: TodayRow[] }) {
     )
   );
 
-  // Starts at 0 so the first client render matches the server's (where nothing
-  // can be overdue yet); the effect starts the clock after hydration.
+  // Starts at 0 so the first client render matches the server's (where the
+  // board is empty); the effect starts the clock after hydration.
   const [now, setNow] = useState(0);
   useEffect(() => {
     setNow(Date.now());
@@ -82,31 +82,34 @@ export function TodayList({ rows }: { rows: TodayRow[] }) {
       });
   }
 
-  // Students who are checked in, not checked out, and have now been in for at
-  // least their session's scheduled length. Most overdue first.
-  const overdue: OverdueEntry[] = useMemo(() => {
-    const out: OverdueEntry[] = [];
+  // Students who are checked in, not checked out, and are within five minutes
+  // of their session length — or already past it. Sorted by time remaining
+  // ascending, so the most overdue is on top, then whoever is closest to their
+  // own check-out time, and so on down.
+  const due: DueEntry[] = useMemo(() => {
+    const out: DueEntry[] = [];
     for (const row of rows) {
       const state = states[row.attendanceId] ?? {
         status: row.status,
         checkInAt: row.checkInAt,
         checkOutAt: row.checkOutAt,
       };
-      const overBy = overdueBy(row, state, now);
-      if (overBy !== null) out.push({ row, state, overBy });
+      const remaining = msUntilDue(row, state, now);
+      if (remaining === null || remaining > DUE_SOON_MS) continue;
+      out.push({ row, state, remaining });
     }
-    return out.sort((a, b) => b.overBy - a.overBy);
+    return out.sort((a, b) => a.remaining - b.remaining);
   }, [rows, states, now]);
 
-  const overdueIds = useMemo(
-    () => new Set(overdue.map((e) => e.row.attendanceId)),
-    [overdue]
+  const dueIds = useMemo(
+    () => new Set(due.map((e) => e.row.attendanceId)),
+    [due]
   );
 
-  // Overdue students are lifted into the board, so they leave the table.
+  // Students on the board are lifted out of the table, so they never show twice.
   const tableRows = useMemo(
-    () => rows.filter((r) => !overdueIds.has(r.attendanceId)),
-    [rows, overdueIds]
+    () => rows.filter((r) => !dueIds.has(r.attendanceId)),
+    [rows, dueIds]
   );
 
   // Recomputed from live state so "Check in all (n)" stays honest after
@@ -124,7 +127,7 @@ export function TodayList({ rows }: { rows: TodayRow[] }) {
 
   return (
     <div className="space-y-4">
-      <OverdueBoard entries={overdue} dispatch={dispatch} />
+      <DueBoard entries={due} dispatch={dispatch} />
 
       {tableRows.length > 0 ? (
         <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">

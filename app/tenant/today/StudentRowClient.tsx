@@ -408,12 +408,14 @@ export function StudentTableRow(props: StudentRowProps) {
               ) : null}
             </p>
             {state.checkInAt ? (
-              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
-                <span>In {formatClockTime(state.checkInAt)}</span>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
                 <LiveTimer since={state.checkInAt} until={state.checkOutAt} />
-                {state.checkOutAt ? (
-                  <span>Out {formatClockTime(state.checkOutAt)}</span>
-                ) : null}
+                <div className="flex flex-col text-xs text-muted">
+                  <span>In {formatClockTime(state.checkInAt)}</span>
+                  {state.checkOutAt ? (
+                    <span>Out {formatClockTime(state.checkOutAt)}</span>
+                  ) : null}
+                </div>
               </div>
             ) : null}
           </div>
