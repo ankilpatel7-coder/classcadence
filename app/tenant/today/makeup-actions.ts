@@ -145,6 +145,12 @@ export async function offerMakeupAction(formData: FormData) {
     );
   }
 
+  // Offering supersedes an earlier "don't offer" decision.
+  await db
+    .update(attendanceRecords)
+    .set({ makeupWaivedAt: null, makeupWaivedBy: null, makeupWaivedReason: null })
+    .where(eq(attendanceRecords.id, r!.id));
+
   revalidatePath("/tenant/today");
   revalidatePath("/tenant/makeups");
   // Surface the raw token URL once via query string so the front desk can copy
@@ -268,6 +274,144 @@ function escMakeup(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+// ============ Waiver: explicitly decide NOT to offer a make-up ============
+
+// Where the waive/un-waive buttons can send the user back to. Anything else is
+// ignored, so the redirect target can never be attacker-controlled.
+const RETURN_TARGETS: Record<string, string> = {
+  today: "/tenant/today",
+  makeups: "/tenant/makeups",
+};
+
+function returnTarget(formData: FormData): string {
+  const raw = formData.get("return_to");
+  return (typeof raw === "string" ? RETURN_TARGETS[raw] : null) ?? "/tenant/makeups";
+}
+
+// Confirms the attendance row exists AND belongs to the caller's tenant.
+// Returns null when it doesn't — callers redirect on null.
+async function findTenantAttendance(attendanceId: string, tenantId: string) {
+  const [row] = await db
+    .select({ id: attendanceRecords.id, status: attendanceRecords.status })
+    .from(attendanceRecords)
+    .innerJoin(sessions, eq(sessions.id, attendanceRecords.sessionId))
+    .innerJoin(timeSlots, eq(timeSlots.id, sessions.timeSlotId))
+    .innerJoin(classrooms, eq(classrooms.id, timeSlots.classroomId))
+    .innerJoin(locations, eq(locations.id, classrooms.locationId))
+    .where(
+      and(
+        eq(attendanceRecords.id, attendanceId),
+        eq(locations.tenantId, tenantId)
+      )
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+// Records "no make-up for this absence". The row leaves the "Needs a make-up"
+// queue and lands in "Not offered", where it can be undone.
+export async function waiveMakeupAction(formData: FormData) {
+  const user = await getCurrentUserOrRedirect();
+  const back = returnTarget(formData);
+  if (!canOfferMakeup(user.role)) redirect(`${back}?error=forbidden`);
+
+  const attendanceId = formData.get("attendance_id");
+  if (typeof attendanceId !== "string" || !/^[0-9a-f-]{36}$/i.test(attendanceId)) {
+    redirect(`${back}?error=invalid-id`);
+  }
+  const id = attendanceId as string;
+
+  const rawReason = formData.get("reason");
+  const reason =
+    typeof rawReason === "string" && rawReason.trim()
+      ? rawReason.trim().slice(0, 500)
+      : null;
+
+  const row = await findTenantAttendance(id, user.tenantId!);
+  if (!row) redirect(`${back}?error=not-found`);
+
+  // An accepted offer already put the student on a future session; waiving now
+  // would leave that booking orphaned. Make the admin undo it explicitly.
+  const [offer] = await db
+    .select({ state: makeupOffers.state })
+    .from(makeupOffers)
+    .where(eq(makeupOffers.absentAttendanceId, id))
+    .limit(1);
+  if (offer?.state === "accepted") {
+    redirect(
+      `${back}?error=` +
+        encodeURIComponent(
+          "This make-up was already accepted — cancel the scheduled class before marking it as not offered."
+        )
+    );
+  }
+
+  const nowTs = new Date();
+  try {
+    await db
+      .update(attendanceRecords)
+      .set({
+        makeupWaivedAt: nowTs,
+        makeupWaivedBy: user.id,
+        makeupWaivedReason: reason,
+      })
+      .where(eq(attendanceRecords.id, id));
+
+    // Kill any outstanding offer so the parent's link stops working.
+    if (offer?.state === "pending") {
+      await db
+        .update(makeupOffers)
+        .set({ state: "expired", respondedAt: nowTs })
+        .where(eq(makeupOffers.absentAttendanceId, id));
+    }
+  } catch (err) {
+    redirect(
+      `${back}?error=` +
+        encodeURIComponent(err instanceof Error ? err.message : "waive-failed")
+    );
+  }
+
+  revalidatePath("/tenant/today");
+  revalidatePath("/tenant/makeups");
+  redirect(`${back}?waived=1`);
+}
+
+// Undo a waiver — puts the absence back in the "Needs a make-up" queue.
+export async function unwaiveMakeupAction(formData: FormData) {
+  const user = await getCurrentUserOrRedirect();
+  const back = returnTarget(formData);
+  if (!canOfferMakeup(user.role)) redirect(`${back}?error=forbidden`);
+
+  const attendanceId = formData.get("attendance_id");
+  if (typeof attendanceId !== "string" || !/^[0-9a-f-]{36}$/i.test(attendanceId)) {
+    redirect(`${back}?error=invalid-id`);
+  }
+  const id = attendanceId as string;
+
+  const row = await findTenantAttendance(id, user.tenantId!);
+  if (!row) redirect(`${back}?error=not-found`);
+
+  try {
+    await db
+      .update(attendanceRecords)
+      .set({
+        makeupWaivedAt: null,
+        makeupWaivedBy: null,
+        makeupWaivedReason: null,
+      })
+      .where(eq(attendanceRecords.id, id));
+  } catch (err) {
+    redirect(
+      `${back}?error=` +
+        encodeURIComponent(err instanceof Error ? err.message : "unwaive-failed")
+    );
+  }
+
+  revalidatePath("/tenant/today");
+  revalidatePath("/tenant/makeups");
+  redirect(`${back}?unwaived=1`);
 }
 
 // ============ Admin-driven make-up: pick N sessions explicitly ============

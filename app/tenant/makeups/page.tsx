@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Sparkles, UserPlus, X } from "lucide-react";
+import { Ban, RotateCcw, Sparkles, UserPlus } from "lucide-react";
 import { and, eq, gte, inArray, desc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
@@ -15,6 +15,10 @@ import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { formatTimeInTimezone } from "@/lib/time";
 import { StudentAvatar } from "@/app/_components/StudentAvatar";
 import { OfferMakeupButton } from "@/app/tenant/today/OfferMakeupButton";
+import {
+  waiveMakeupAction,
+  unwaiveMakeupAction,
+} from "@/app/tenant/today/makeup-actions";
 
 export const metadata = { title: "Make-ups — ClassCadence" };
 export const dynamic = "force-dynamic";
@@ -30,6 +34,8 @@ type AbsenceRow = {
   locationName: string;
   studentName: string;
   studentId: string;
+  waivedAt: string | null;
+  waivedReason: string | null;
   offer:
     | {
         state: "pending" | "accepted" | "declined" | "expired";
@@ -46,6 +52,8 @@ export default async function MakeupsPage({
     error?: string;
     added?: string;
     manual_added?: string;
+    waived?: string;
+    unwaived?: string;
   };
 }) {
   const user = await getCurrentUserOrRedirect();
@@ -69,6 +77,8 @@ export default async function MakeupsPage({
       tz: locations.ianaTimezone,
       studentFirstName: students.firstName,
       studentLastName: students.lastName,
+      makeupWaivedAt: attendanceRecords.makeupWaivedAt,
+      makeupWaivedReason: attendanceRecords.makeupWaivedReason,
     })
     .from(attendanceRecords)
     .innerJoin(sessions, eq(sessions.id, attendanceRecords.sessionId))
@@ -123,14 +133,21 @@ export default async function MakeupsPage({
       `${a.studentFirstName ?? ""} ${a.studentLastName ?? ""}`.trim() ||
       "Unknown",
     studentId: a.studentId,
+    waivedAt: a.makeupWaivedAt ? a.makeupWaivedAt.toISOString() : null,
+    waivedReason: a.makeupWaivedReason,
     offer: offerMap.get(a.attendanceId) ?? null,
   }));
 
+  // Staff explicitly decided not to offer a make-up — parked, not outstanding.
+  const notOffered = rows.filter((r) => r.waivedAt !== null && r.status === "absent");
   const needsOffer = rows.filter(
-    (r) => r.status === "absent" && (!r.offer || r.offer.state === "expired" || r.offer.state === "declined")
+    (r) =>
+      r.status === "absent" &&
+      r.waivedAt === null &&
+      (!r.offer || r.offer.state === "expired" || r.offer.state === "declined")
   );
   const pending = rows.filter(
-    (r) => r.offer?.state === "pending"
+    (r) => r.offer?.state === "pending" && r.waivedAt === null
   );
   const completed = rows.filter(
     (r) => r.status === "made_up" || r.offer?.state === "accepted"
@@ -180,6 +197,19 @@ export default async function MakeupsPage({
         </div>
       ) : null}
 
+      {searchParams.waived ? (
+        <div className="rounded-md border border-line bg-bg/60 px-4 py-3 text-sm text-ink">
+          Marked as no make-up. It moved to &ldquo;Not offered&rdquo; — undo
+          there if you change your mind.
+        </div>
+      ) : null}
+
+      {searchParams.unwaived ? (
+        <div className="rounded-md border border-primary/30 bg-primary-soft/40 px-4 py-3 text-sm text-ink">
+          Back in &ldquo;Needs a make-up&rdquo;.
+        </div>
+      ) : null}
+
       {searchParams.makeup_url ? (
         <div className="rounded-md border border-primary/30 bg-primary-soft/40 px-4 py-3 text-sm text-ink">
           <p className="font-medium text-primary-strong">Make-up offer created.</p>
@@ -197,7 +227,51 @@ export default async function MakeupsPage({
         emptyLabel="No outstanding absences to offer make-ups for."
         rows={needsOffer}
         renderActions={(r) => (
-          <OfferMakeupButton attendanceId={r.attendanceId} />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <OfferMakeupButton attendanceId={r.attendanceId} />
+            <form action={waiveMakeupAction}>
+              <input type="hidden" name="attendance_id" value={r.attendanceId} />
+              <input type="hidden" name="return_to" value="makeups" />
+              <button
+                type="submit"
+                title={`Record that ${r.studentName} is not being offered a make-up`}
+                className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-3 py-1.5 text-xs font-medium text-muted transition hover:border-danger/30 hover:bg-danger/5 hover:text-danger"
+              >
+                <Ban className="h-3.5 w-3.5" />
+                Don&apos;t offer
+              </button>
+            </form>
+          </div>
+        )}
+      />
+
+      <Section
+        title="Not offered"
+        emptyLabel="No absences have been marked as not getting a make-up."
+        rows={notOffered}
+        renderActions={(r) => (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span
+              className="rounded-full bg-line px-2 py-0.5 text-[11px] font-medium text-muted"
+              title={r.waivedReason ?? undefined}
+            >
+              No make-up
+              {r.waivedAt
+                ? ` · ${new Date(r.waivedAt).toLocaleDateString()}`
+                : ""}
+            </span>
+            <form action={unwaiveMakeupAction}>
+              <input type="hidden" name="attendance_id" value={r.attendanceId} />
+              <input type="hidden" name="return_to" value="makeups" />
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-3 py-1.5 text-xs font-medium text-muted transition hover:border-primary/30 hover:text-primary"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Undo
+              </button>
+            </form>
+          </div>
         )}
       />
 

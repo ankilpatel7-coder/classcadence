@@ -16,6 +16,7 @@ import {
   tenants,
 } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
+import { MATERIALIZE_HORIZON_DAYS } from "@/lib/scheduling";
 import { materializeSessions } from "@/app/tenant/today/actions";
 import { formatTime12h } from "@/lib/time";
 import {
@@ -418,7 +419,7 @@ export async function enrollStudentAction(
 
   // Targeted materialize — only the slot this student just enrolled into,
   // not every slot in the tenant. Fast.
-  await materializeSessions(14, [parsed.data.time_slot_id]).catch(() => {});
+  await materializeSessions(MATERIALIZE_HORIZON_DAYS, [parsed.data.time_slot_id]).catch(() => {});
 
   // Fire-and-forget notification fan-out. Failures are swallowed inside
   // the helper so a Resend hiccup never blocks an enrollment.

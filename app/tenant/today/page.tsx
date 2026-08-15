@@ -1,5 +1,4 @@
-import { Fragment } from "react";
-import { CalendarDays, CheckCheck } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
@@ -15,11 +14,10 @@ import {
   localToUtc,
   todayInTimezone,
 } from "@/lib/time";
-import { checkInAllExpectedAction } from "./actions";
 import { loadSessionsInWindow } from "./load-sessions";
-import { StudentTableRow, StudentCard } from "./StudentRowClient";
-import { LessonNoteWidget } from "./LessonNoteWidget";
 import { ManualCheckIn } from "./ManualCheckIn";
+import { TodayList } from "./TodayList";
+import type { TodayRow } from "./types";
 
 export const metadata = { title: "Today — ClassCadence" };
 export const dynamic = "force-dynamic";
@@ -131,38 +129,20 @@ export default async function TodayPage({
   );
 
   // Flatten into row data (one row per session × student), sorted by time.
-  type FlatRow = {
-    attendanceId: string;
-    sessionId: string;
-    startUtc: string;
-    endUtc: string;
-    tz: string;
-    classroomName: string;
-    classroomColor: string;
-    locationName: string;
-    studentId: string;
-    firstName: string;
-    lastName: string;
-    status: string;
-    checkInAt: string | null;
-    checkOutAt: string | null;
-    isMakeup: boolean;
-    isManual: boolean;
-    notes: { body: string; visibility: string; created_at: string }[];
-  };
-
-  const rows: FlatRow[] = sessionRows
-    .flatMap((s) =>
-      (s.attendance_records ?? []).map<FlatRow>((r) => ({
+  // Times are localized here so the client list never has to know about
+  // timezones.
+  const rows: TodayRow[] = sessionRows
+    .flatMap((s) => {
+      const tz = s.time_slots.classrooms.locations.iana_timezone ?? primaryTz;
+      return (s.attendance_records ?? []).map<TodayRow>((r) => ({
         attendanceId: r.id,
         sessionId: s.id,
         startUtc: s.scheduled_start_utc,
         endUtc: s.scheduled_end_utc,
-        tz: s.time_slots.classrooms.locations.iana_timezone ?? primaryTz,
+        startLocal: formatTimeInTimezone(s.scheduled_start_utc, tz),
+        endLocal: formatTimeInTimezone(s.scheduled_end_utc, tz),
         classroomName: s.time_slots.classrooms.name,
         classroomColor: s.time_slots.classrooms.color,
-        locationName: s.time_slots.classrooms.locations.name,
-        studentId: r.students.id,
         firstName: r.students.first_name,
         lastName: r.students.last_name,
         status: r.status,
@@ -170,9 +150,13 @@ export default async function TodayPage({
         checkOutAt: r.check_out_at,
         isMakeup: r.is_makeup,
         isManual: r.is_manual,
-        notes: r.lesson_notes ?? [],
-      }))
-    )
+        notes: (r.lesson_notes ?? []).map((n) => ({
+          body: n.body,
+          visibility: n.visibility,
+          createdAt: n.created_at,
+        })),
+      }));
+    })
     .sort((a, b) => {
       if (a.startUtc !== b.startUtc) return a.startUtc.localeCompare(b.startUtc);
       return `${a.lastName} ${a.firstName}`.localeCompare(
@@ -226,20 +210,6 @@ export default async function TodayPage({
       s.tz ?? primaryTz
     )} · ${s.classroomName}`,
   }));
-
-  // Group rows by session for the "check in all" header bar.
-  const sessionMeta = new Map<
-    string,
-    { expected: number; classroomName: string }
-  >();
-  for (const r of rows) {
-    const m = sessionMeta.get(r.sessionId) ?? {
-      expected: 0,
-      classroomName: r.classroomName,
-    };
-    if (r.status === "expected") m.expected++;
-    sessionMeta.set(r.sessionId, m);
-  }
 
   return (
     <div className="space-y-6">
@@ -306,178 +276,9 @@ export default async function TodayPage({
           ) : null}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
-          {/* Desktop table */}
-          <table className="hidden min-w-full divide-y divide-line md:table">
-            <thead>
-              <tr className="border-b border-line bg-bg/50">
-                <Th>Time</Th>
-                <Th>Class</Th>
-                <Th>Student</Th>
-                <Th>Status</Th>
-                <Th className="text-right">Actions</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line/60 bg-surface">
-              {rows.map((r, idx) => {
-                const prev = idx > 0 ? rows[idx - 1] : null;
-                const isNewSession = !prev || prev.sessionId !== r.sessionId;
-                const startLocal = formatTimeInTimezone(r.startUtc, r.tz);
-                const endLocal = formatTimeInTimezone(r.endUtc, r.tz);
-                return (
-                  <Fragment key={r.attendanceId}>
-                    {isNewSession ? (
-                      <SessionHeaderRow
-                        sessionId={r.sessionId}
-                        classroomName={r.classroomName}
-                        classroomColor={r.classroomColor}
-                        startLocal={startLocal}
-                        endLocal={endLocal}
-                        sessionExpected={
-                          sessionMeta.get(r.sessionId)?.expected ?? 0
-                        }
-                      />
-                    ) : null}
-                    <StudentTableRow
-                      attendanceId={r.attendanceId}
-                      status={r.status}
-                      checkInAt={r.checkInAt}
-                      checkOutAt={r.checkOutAt}
-                      startLocal={startLocal}
-                      endLocal={endLocal}
-                      classroomName={r.classroomName}
-                      classroomColor={r.classroomColor}
-                      firstName={r.firstName}
-                      lastName={r.lastName}
-                      isMakeup={r.isMakeup}
-                      isManual={r.isManual}
-                      notes={r.notes.map((n) => ({
-                        body: n.body,
-                        visibility: n.visibility,
-                        createdAt: n.created_at,
-                      }))}
-                    />
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-
-          {/* Mobile card list */}
-          <ul className="divide-y divide-line md:hidden">
-            {rows.map((r) => {
-              const startLocal = formatTimeInTimezone(r.startUtc, r.tz);
-              const endLocal = formatTimeInTimezone(r.endUtc, r.tz);
-              return (
-                <Fragment key={r.attendanceId}>
-                  <StudentCard
-                    attendanceId={r.attendanceId}
-                    status={r.status}
-                    checkInAt={r.checkInAt}
-                    checkOutAt={r.checkOutAt}
-                    startLocal={startLocal}
-                    endLocal={endLocal}
-                    classroomName={r.classroomName}
-                    classroomColor={r.classroomColor}
-                    firstName={r.firstName}
-                    lastName={r.lastName}
-                    isMakeup={r.isMakeup}
-                    isManual={r.isManual}
-                    notes={r.notes.map((n) => ({
-                      body: n.body,
-                      visibility: n.visibility,
-                      createdAt: n.created_at,
-                    }))}
-                  />
-                  <li className="px-3 pb-3">
-                    <LessonNoteWidget
-                      attendanceId={r.attendanceId}
-                      existingNotes={r.notes.map((n) => ({
-                        body: n.body,
-                        visibility:
-                          n.visibility === "parent" ? "parent" : "internal",
-                        createdAt: n.created_at,
-                      }))}
-                    />
-                  </li>
-                </Fragment>
-              );
-            })}
-          </ul>
-        </div>
+        <TodayList rows={rows} />
       )}
     </div>
-  );
-}
-
-function SessionHeaderRow({
-  sessionId,
-  classroomName,
-  classroomColor,
-  startLocal,
-  endLocal,
-  sessionExpected,
-}: {
-  sessionId: string;
-  classroomName: string;
-  classroomColor: string;
-  startLocal: string;
-  endLocal: string;
-  sessionExpected: number;
-}) {
-  return (
-    <tr
-      style={{
-        backgroundImage: `linear-gradient(90deg, ${classroomColor}1A 0%, ${classroomColor}08 40%, transparent 100%)`,
-        borderLeft: `3px solid ${classroomColor}`,
-      }}
-    >
-      <td colSpan={5} className="px-4 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span
-              className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-surface"
-              style={{ backgroundColor: classroomColor }}
-            />
-            <p className="font-mono text-base font-bold tabular-nums text-ink">
-              {startLocal}
-              <span className="text-muted">–</span>
-              {endLocal}
-            </p>
-            <span className="text-muted">·</span>
-            <p className="text-sm font-semibold text-ink/85">{classroomName}</p>
-          </div>
-          {sessionExpected > 0 ? (
-            <form action={checkInAllExpectedAction}>
-              <input type="hidden" name="session_id" value={sessionId} />
-              <button
-                type="submit"
-                className="inline-flex items-center gap-1.5 rounded-full bg-success px-3.5 py-1.5 text-xs font-semibold text-white shadow-emboss transition hover:-translate-y-px hover:brightness-110"
-              >
-                <CheckCheck className="h-3.5 w-3.5" />
-                Check in all ({sessionExpected})
-              </button>
-            </form>
-          ) : null}
-        </div>
-      </td>
-    </tr>
-  );
-}
-
-function Th({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <th
-      className={`px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-[0.15em] text-muted ${className}`}
-    >
-      {children}
-    </th>
   );
 }
 

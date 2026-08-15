@@ -13,6 +13,7 @@ import {
 } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
 import { formatTimeInTimezone } from "@/lib/time";
+import { MAKEUP_PICKER_HORIZON_DAYS } from "@/lib/scheduling";
 import { StudentAvatar } from "@/app/_components/StudentAvatar";
 import { MakeupOfferForm, type SessionOption } from "./MakeupOfferForm";
 
@@ -90,7 +91,7 @@ export default async function OfferMakeupPage({
   }
 
   const now = new Date();
-  const horizonDays = 30;
+  const horizonDays = MAKEUP_PICKER_HORIZON_DAYS;
   const horizon = new Date(Date.now() + horizonDays * 24 * 60 * 60 * 1000);
 
   const upcomingSessions = await db

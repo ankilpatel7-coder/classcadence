@@ -468,6 +468,12 @@ export const attendanceRecords = pgTable(
     // Second FK to sessions — see [[attendance-sessions-embed]].
     madeUpInSessionId: uuid("made_up_in_session_id").references(() => sessions.id),
     excusedReason: text("excused_reason"),
+    // Staff decided this absence gets no make-up. Distinct from a parent
+    // declining an offer (makeup_offers.state = 'declined') — here no offer is
+    // ever made, and the absence stops showing in "Needs a make-up".
+    makeupWaivedAt: timestamp("makeup_waived_at", { withTimezone: true }),
+    makeupWaivedBy: uuid("makeup_waived_by").references(() => userProfiles.id),
+    makeupWaivedReason: text("makeup_waived_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(now),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(now),
   },

@@ -15,6 +15,7 @@ import {
   brandingAssets,
 } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
+import { MATERIALIZE_HORIZON_DAYS } from "@/lib/scheduling";
 import { materializeSessions } from "@/app/tenant/today/actions";
 
 function ensureAdmin(role: string | null | undefined) {
@@ -251,7 +252,7 @@ export async function seedDemoDataAction() {
     }
   }
 
-  const materialize = await materializeSessions(14);
+  const materialize = await materializeSessions(MATERIALIZE_HORIZON_DAYS);
 
   const params = new URLSearchParams({
     seeded_households: String(householdsInserted),

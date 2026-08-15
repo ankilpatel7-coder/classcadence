@@ -10,6 +10,7 @@ import {
 } from "@/lib/db/schema";
 import { inngest } from "./client";
 import { datesForWeekdayInRange, localToUtc } from "@/lib/time";
+import { MATERIALIZE_HORIZON_DAYS } from "@/lib/scheduling";
 import { sendDayOfReminders } from "@/lib/notifications/reminders";
 
 // Daily materialization (BA: 06:00 local-per-location). For v1 we run it at
@@ -19,9 +20,11 @@ export const materializeDaily = inngest.createFunction(
   { id: "materialize-daily", name: "Materialize sessions (daily)" },
   { cron: "0 6 * * *" },
   async ({ step }) => {
-    await step.run("materialize-14-days", async () => {
+    await step.run("materialize-horizon", async () => {
       const now = new Date();
-      const until = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+      const until = new Date(
+        now.getTime() + MATERIALIZE_HORIZON_DAYS * 24 * 60 * 60 * 1000
+      );
 
       // Active slots whose classroom AND location are also active.
       const active = await db

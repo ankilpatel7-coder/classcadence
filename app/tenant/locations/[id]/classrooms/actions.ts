@@ -13,6 +13,7 @@ import {
   timeSlots,
 } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
+import { MATERIALIZE_HORIZON_DAYS } from "@/lib/scheduling";
 import { formatTime12h } from "@/lib/time";
 import { materializeSessions } from "@/app/tenant/today/actions";
 
@@ -441,7 +442,7 @@ export async function saveTimeSlotsAction(
   // Auto-materialize the just-inserted slots so they appear on Today/Schedule
   // immediately. Targeted by slot id — no full-tenant scan.
   if (insertedSlotIds.length > 0) {
-    await materializeSessions(14, insertedSlotIds).catch(() => {
+    await materializeSessions(MATERIALIZE_HORIZON_DAYS, insertedSlotIds).catch(() => {
       /* best-effort; Force refresh button on Settings covers gaps */
     });
   }

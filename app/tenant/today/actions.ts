@@ -16,6 +16,7 @@ import {
   students,
 } from "@/lib/db/schema";
 import { getCurrentUserOrRedirect } from "@/lib/auth/current-user";
+import { MATERIALIZE_HORIZON_DAYS } from "@/lib/scheduling";
 import {
   datesForWeekdayInRange,
   localToUtc,
@@ -40,7 +41,7 @@ export async function materializeSessionsAction(_formData: FormData) {
   ) {
     redirect("/tenant?error=forbidden");
   }
-  const result = await materializeSessions(14);
+  const result = await materializeSessions(MATERIALIZE_HORIZON_DAYS);
   const params = new URLSearchParams({
     materialized_sessions: String(result.sessionsInserted),
     materialized_attendance: String(result.attendanceInserted),

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  Ban,
   Check,
   LogOut,
   CircleSlash,
@@ -14,22 +15,22 @@ import {
 import { StudentAvatar } from "@/app/_components/StudentAvatar";
 import { StatusBadge } from "@/app/_components/StatusIcon";
 import { LiveTimer } from "@/app/_components/LiveTimer";
-import { offerMakeupAction } from "./makeup-actions";
+import { offerMakeupAction, waiveMakeupAction } from "./makeup-actions";
 
-type Action =
+export type Action =
   | "check_in"
   | "check_out"
   | "mark_absent"
   | "mark_excused"
   | "reset";
 
-type RowState = {
+export type RowState = {
   status: string;
   checkInAt: string | null;
   checkOutAt: string | null;
 };
 
-function reduce(state: RowState, action: Action): RowState {
+export function reduce(state: RowState, action: Action): RowState {
   const now = new Date().toISOString();
   switch (action) {
     case "check_in":
@@ -93,37 +94,6 @@ const META: Record<Action, ButtonMeta> = {
   },
 };
 
-function useRowState(initial: RowState, attendanceId: string) {
-  // Plain client state: lives until the page navigates away, so we never
-  // need to call router.refresh(). The server action runs in the
-  // background; if it fails we roll back. revalidatePath in the action
-  // keeps the next fresh navigation honest.
-  const [state, setState] = useState<RowState>(initial);
-
-  function dispatch(action: Action) {
-    const prev = state;
-    setState((s) => reduce(s, action));
-    fetch("/api/attendance", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ attendance_id: attendanceId, action }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const text = await res.text().catch(() => "");
-          console.error("[attendance] update failed:", res.status, text);
-          setState(prev);
-        }
-      })
-      .catch((err) => {
-        console.error("[attendance] update threw:", err);
-        setState(prev);
-      });
-  }
-
-  return { state, dispatch };
-}
-
 function ActionButton({
   action,
   onClick,
@@ -148,7 +118,13 @@ function ActionButton({
 // Manually emails the parent that the student is ready for pickup. Posts the
 // `notify_parent` action, which sends the email without touching attendance
 // state. (Pickup emails are no longer sent automatically on check-out.)
-function NotifyParentButton({ attendanceId }: { attendanceId: string }) {
+export function NotifyParentButton({
+  attendanceId,
+  emphasis = false,
+}: {
+  attendanceId: string;
+  emphasis?: boolean;
+}) {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
     "idle"
   );
@@ -185,12 +161,16 @@ function NotifyParentButton({ attendanceId }: { attendanceId: string }) {
           ? "Retry notify"
           : "Notify parent";
 
+  const idleTone = emphasis
+    ? "bg-danger text-white shadow-emboss hover:brightness-110 hover:-translate-y-px active:translate-y-0"
+    : "bg-bg/80 text-ink/70 ring-1 ring-inset ring-line/70 hover:bg-bg hover:text-ink hover:-translate-y-px active:translate-y-0";
+
   const tone =
     status === "sent"
       ? "bg-success/10 text-success ring-1 ring-inset ring-success/20"
       : status === "error"
         ? "bg-danger/10 text-danger ring-1 ring-inset ring-danger/20 hover:bg-danger/15 hover:-translate-y-px active:translate-y-0"
-        : "bg-bg/80 text-ink/70 ring-1 ring-inset ring-line/70 hover:bg-bg hover:text-ink hover:-translate-y-px active:translate-y-0";
+        : idleTone;
 
   return (
     <button
@@ -206,18 +186,20 @@ function NotifyParentButton({ attendanceId }: { attendanceId: string }) {
   );
 }
 
-function ActionButtons({
+export function ActionButtons({
   state,
   dispatch,
   attendanceId,
   studentName,
   onAfterAbsentOrExcuse,
+  emphasizeNotify = false,
 }: {
   state: RowState;
   dispatch: (a: Action) => void;
   attendanceId: string;
   studentName: string;
   onAfterAbsentOrExcuse: () => void;
+  emphasizeNotify?: boolean;
 }) {
   const checkedIn = !!state.checkInAt;
   const checkedOut = !!state.checkOutAt;
@@ -229,7 +211,12 @@ function ActionButtons({
       {checkedIn && !checkedOut ? (
         <ActionButton action="check_out" onClick={() => dispatch("check_out")} />
       ) : null}
-      {checkedIn ? <NotifyParentButton attendanceId={attendanceId} /> : null}
+      {checkedIn ? (
+        <NotifyParentButton
+          attendanceId={attendanceId}
+          emphasis={emphasizeNotify}
+        />
+      ) : null}
       {state.status === "expected" || state.status === "late" ? (
         <ActionButton
           action="mark_absent"
@@ -322,7 +309,9 @@ function MakeupPrompt({
             </p>
           </div>
         </div>
-        <div className="mt-4 flex items-center justify-end gap-2">
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+          {/* "Not now" just dismisses — the absence stays in the Make-ups
+              queue. "Don't offer" records the decision and takes it out. */}
           <button
             type="button"
             onClick={onClose}
@@ -330,6 +319,18 @@ function MakeupPrompt({
           >
             Not now
           </button>
+          <form action={waiveMakeupAction} className="inline-flex">
+            <input type="hidden" name="attendance_id" value={attendanceId} />
+            <input type="hidden" name="return_to" value="today" />
+            <button
+              type="submit"
+              title={`Record that ${studentName} is not being offered a make-up`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-3 py-1.5 text-sm font-medium text-muted transition hover:border-danger/30 hover:bg-danger/5 hover:text-danger"
+            >
+              <Ban className="h-3.5 w-3.5" />
+              Don&apos;t offer
+            </button>
+          </form>
           <OfferMakeupForm attendanceId={attendanceId}>
             <button type="submit" className="btn-primary !px-3 !py-1.5">
               <Sparkles className="h-3.5 w-3.5" />
@@ -342,7 +343,7 @@ function MakeupPrompt({
   );
 }
 
-function formatClockTime(iso: string): string {
+export function formatClockTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
@@ -350,11 +351,11 @@ function formatClockTime(iso: string): string {
   });
 }
 
+// Static, server-provided fields. The mutable attendance state (status /
+// check-in / check-out) is owned by TodayList so the "time's up" board and the
+// table stay in sync off one source of truth.
 export type StudentRowProps = {
   attendanceId: string;
-  status: string;
-  checkInAt: string | null;
-  checkOutAt: string | null;
   startLocal: string;
   endLocal: string;
   classroomName: string;
@@ -364,17 +365,12 @@ export type StudentRowProps = {
   isMakeup: boolean;
   isManual: boolean;
   notes: { body: string; visibility: string; createdAt: string }[];
+  state: RowState;
+  dispatch: (a: Action) => void;
 };
 
 export function StudentTableRow(props: StudentRowProps) {
-  const { state, dispatch } = useRowState(
-    {
-      status: props.status,
-      checkInAt: props.checkInAt,
-      checkOutAt: props.checkOutAt,
-    },
-    props.attendanceId
-  );
+  const { state, dispatch } = props;
   const [showMakeupPrompt, setShowMakeupPrompt] = useState(false);
   const studentName = `${props.firstName} ${props.lastName}`.trim();
 
@@ -458,14 +454,7 @@ export function StudentTableRow(props: StudentRowProps) {
 }
 
 export function StudentCard(props: StudentRowProps) {
-  const { state, dispatch } = useRowState(
-    {
-      status: props.status,
-      checkInAt: props.checkInAt,
-      checkOutAt: props.checkOutAt,
-    },
-    props.attendanceId
-  );
+  const { state, dispatch } = props;
   const [showMakeupPrompt, setShowMakeupPrompt] = useState(false);
   const studentName = `${props.firstName} ${props.lastName}`.trim();
 
